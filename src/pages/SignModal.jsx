@@ -92,16 +92,21 @@ const SignupModal = ({ onClose, onSwitchToLogin }) => {
       } else {
         console.log("Signed up successfully:", data.user);
         
-        // Show success message or redirect
+        // Show success message in the UI briefly, then switch to login
         if (data.user && !data.user.email_confirmed_at) {
           setErrors({ 
-            submit: "Success! Please check your email to confirm your account before logging in." 
+            submit: "Success! Please check your email to confirm your account. Redirecting to login..." 
           });
         } else {
-          // User is confirmed, close modal or redirect
-          alert("Account created successfully!");
-          onClose();
+          setErrors({ 
+            submit: "Account created successfully! Redirecting to login..." 
+          });
         }
+        
+        // Wait 2 seconds to show the success message, then navigate to login
+        setTimeout(() => {
+          onSwitchToLogin();
+        }, 2000);
       }
     } catch (error) {
       console.error("Signup error:", error);
