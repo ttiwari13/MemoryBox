@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { User, Mail, Lock, ArrowRight, X, Eye, EyeOff } from "lucide-react";
 import { supabase } from '../supabaseClient';
-
-// Signup Modal Component (without framer-motion dependency)
 const SignupModal = ({ onClose, onSwitchToLogin }) => {
   const [formData, setFormData] = useState({
     fullName: "",
@@ -82,9 +80,7 @@ const SignupModal = ({ onClose, onSwitchToLogin }) => {
 
       if (error) {
         // Handle specific error cases
-        if (error.message.includes('captcha')) {
-          setErrors({ submit: "Captcha verification failed. Please try again or contact support." });
-        } else if (error.message.includes('already registered') || error.message.includes('already been registered')) {
+        if (error.message.includes('already registered') || error.message.includes('already been registered')) {
           setErrors({ submit: "This email is already registered. Try logging in instead." });
         } else {
           setErrors({ submit: error.message });
