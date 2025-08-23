@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
-import Home from './pages/Home'; 
-import LoginModal from './pages/LoginModal'; 
+import Home from './pages/Home';
+import LoginModal from './pages/LoginModal';
 import SignModal from './pages/SignModal';
 import Dashboard from './pages/Dashboard';
 import Footer from './components/Footer';
@@ -45,11 +45,11 @@ function AppContent() {
         if (event === 'SIGNED_IN') {
           setUser(session?.user ?? null);
           setActiveModal(null);
-          navigate('/dashboard');
+          navigate('/dashboard'); // Navigate to dashboard
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setActiveModal(null);
-          navigate('/');
+          navigate('/'); // Go back to home on logout
         }
       }
     );
@@ -77,6 +77,7 @@ function AppContent() {
       {/* Main Content */}
       <div className={`${activeModal ? 'blur-sm' : ''} transition-all duration-300`}>
         <Routes>
+          {/* HOME PAGE - Default route */}
           <Route 
             path="/" 
             element={
@@ -86,6 +87,8 @@ function AppContent() {
               </>
             } 
           />
+          
+          {/* DASHBOARD - Protected route */}
           <Route 
             path="/dashboard" 
             element={
@@ -94,6 +97,45 @@ function AppContent() {
               </ProtectedRoute>
             } 
           />
+          
+          {/* DASHBOARD SUB-ROUTES - Protected routes */}
+          <Route 
+            path="/dashboard/quizzes" 
+            element={
+              <ProtectedRoute user={user}>
+                <Dashboard user={user} />
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/dashboard/contact" 
+            element={
+              <ProtectedRoute user={user}>
+                <Dashboard user={user} />
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/dashboard/medicines" 
+            element={
+              <ProtectedRoute user={user}>
+                <Dashboard user={user} />
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/dashboard/tasks" 
+            element={
+              <ProtectedRoute user={user}>
+                <Dashboard user={user} />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Redirect any unknown routes to HOME */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
@@ -101,14 +143,14 @@ function AppContent() {
       {/* Modals */}
       {activeModal === 'login' && (
         <LoginModal 
-          onClose={closeModal} 
+          onClose={closeModal}
           onSwitchToSignup={switchToSignup}
         />
       )}
       
       {activeModal === 'signup' && (
         <SignModal 
-          onClose={closeModal} 
+          onClose={closeModal}
           onSwitchToLogin={switchToLogin}
         />
       )}
@@ -116,9 +158,13 @@ function AppContent() {
   );
 }
 
-// Main App
+// Main App Wrapper
 function App() {
-  return <AppContent />;
+  return (
+   
+      <AppContent />
+    
+  );
 }
 
-export default App; 
+export default App;
