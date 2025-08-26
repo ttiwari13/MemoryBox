@@ -8,8 +8,6 @@ import {
   Edit3,
   Trash2,
   Save,
-  ArrowLeft,
-  User,
   Image as ImageIcon
 } from "lucide-react";
 
@@ -31,14 +29,13 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-// Component for the Photo Management Form (Caregiver)
+// Component for the Photo Management Form
 const PhotoForm = ({ photo, onSave, onCancel }) => {
   const [currentPhoto, setCurrentPhoto] = useState(photo);
   const [imagePreview, setImagePreview] = useState(photo.imageUrl || null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    // Clean up object URL when component unmounts or photo changes
     return () => {
       if (imagePreview && imagePreview.startsWith("blob:")) {
         URL.revokeObjectURL(imagePreview);
@@ -130,14 +127,16 @@ const PhotoForm = ({ photo, onSave, onCancel }) => {
   );
 };
 
-// Simple Photo Entry Component (Patient View)
+// Simple Photo Entry Component (Patient/Caregiver View)
 const PhotoEntry = ({
-  imageUrl,
+  photo,
   onMicClick,
   isRecording,
   feedback,
   speechSupported,
   networkError,
+  onEdit,
+  onDelete
 }) => {
   const getFeedbackColorClass = () => {
     if (feedback === "correct") return "bg-green-100 text-green-700";
@@ -153,12 +152,20 @@ const PhotoEntry = ({
 
   return (
     <div className="flex flex-col items-center p-4 rounded-xl shadow-lg border-2 border-gray-200 bg-white">
-      <div className="w-full h-48 mb-4 overflow-hidden rounded-lg">
+      <div className="relative w-full h-48 mb-4 overflow-hidden rounded-lg">
         <img
-          src={imageUrl}
-          alt="Memory Photo"
+          src={photo.imageUrl}
+          alt={photo.correctAnswer}
           className="w-full h-full object-cover"
         />
+        <div className="absolute top-2 right-2 flex space-x-2">
+            <button onClick={() => onEdit(photo)} className="p-2 text-blue-500 bg-white rounded-full hover:bg-blue-100 transition-colors">
+              <Edit3 size={18} />
+            </button>
+            <button onClick={() => onDelete(photo.id)} className="p-2 text-red-500 bg-white rounded-full hover:bg-red-100 transition-colors">
+              <Trash2 size={18} />
+            </button>
+        </div>
       </div>
 
       <div className="w-full space-y-4">
@@ -204,12 +211,7 @@ const PhotoEntry = ({
 
 // Main Component
 const ContactContent = () => {
-  const [photos, setPhotos] = useState([
-    { id: 1, imageUrl: "https://via.placeholder.com/400x300/FF6B6B/ffffff?text=Apple", correctAnswer: "apple" },
-    { id: 2, imageUrl: "https://via.placeholder.com/400x300/4ECDC4/ffffff?text=Banana", correctAnswer: "banana" },
-    { id: 3, imageUrl: "https://via.placeholder.com/400x300/45B7D1/ffffff?text=Orange", correctAnswer: "orange" },
-  ]);
-  const [isCaregiverMode, setIsCaregiverMode] = useState(false);
+  const [photos, setPhotos] = useState([]);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingPhoto, setEditingPhoto] = useState(null);
   const [recordingStates, setRecordingStates] = useState({});
@@ -237,10 +239,6 @@ const ContactContent = () => {
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
-      setRecordingStates(prev => ({ ...prev, [index]: false }));
-      if (recordingTimeoutRef.current) {
-        clearTimeout(recordingTimeoutRef.current);
-      }
     } else {
       setRecordingStates(prev => ({ ...prev, [index]: true }));
       setNetworkError(false);
@@ -348,117 +346,55 @@ const ContactContent = () => {
       <div className="flex flex-col md:flex-row justify-between items-center mb-8">
         <div className="text-center md:text-left mb-4 md:mb-0">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">
-             Photo Memory Game
+            🧠 Photo Memory Game
           </h1>
           <p className="text-lg text-gray-600">
-            {isCaregiverMode ? "Manage photo entries" : "Look at the photos and say what you see!"}
+            Manage your photos and have the patient speak the answers directly from here.
           </p>
         </div>
         
-        {/* Mode Switcher */}
+        {/* Add New Photo Button */}
         <button
-          onClick={() => setIsCaregiverMode(!isCaregiverMode)}
+          onClick={() => {
+            setEditingPhoto(null);
+            setIsFormModalOpen(true);
+          }}
           className="flex items-center space-x-2 px-4 py-2 rounded-full bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors shadow-md"
         >
-          {isCaregiverMode ? (
-            <>
-              <ArrowLeft size={18} />
-              <span>Go to Patient View</span>
-            </>
-          ) : (
-            <>
-              <User size={18} />
-              <span>Caregiver Mode</span>
-            </>
-          )}
+          <Plus size={18} />
+          <span>Add New Photo</span>
         </button>
       </div>
 
-      {isCaregiverMode ? (
-        // Caregiver Mode View
-        <div className="space-y-6">
-          <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-800">
-              Your Photo Library
-            </h2>
-            <button
-              onClick={() => {
-                setEditingPhoto(null);
-                setIsFormModalOpen(true);
-              }}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition-colors"
-            >
-              <Plus size={18} />
-              <span>Add New Photo</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {photos.map(photo => (
-              <div key={photo.id} className="bg-white p-4 rounded-lg shadow-sm border">
-                <div className="w-full h-40 mb-3 overflow-hidden rounded-lg">
-                  <img src={photo.imageUrl} alt={photo.correctAnswer} className="w-full h-full object-cover" />
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-semibold text-gray-800">{photo.correctAnswer}</p>
-                </div>
-                <div className="flex justify-center space-x-3 mt-4">
-                  <button onClick={() => handleEditPhoto(photo)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-full transition-colors">
-                    <Edit3 size={18} />
-                  </button>
-                  <button onClick={() => handleDeletePhoto(photo.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-full transition-colors">
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Main Photo Grid (Caregiver View) */}
+      <div className="space-y-6">
+        <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-800">
+            Your Photo Library
+          </h2>
         </div>
-      ) : (
-        // Patient Mode View
-        <div className="space-y-6">
-          {/* Status and Instructions */}
-          <div className="mb-8 space-y-4">
-            <div className={`p-4 rounded-lg border-2 ${speechSupported ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"}`}>
-              <div className="flex items-center space-x-2">
-                {speechSupported ? (
-                  <>
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    <span className="font-medium text-green-800">🎤 Speech Recognition Available</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                    <span className="font-medium text-orange-800">⌨️ Text Input Only</span>
-                  </>
-                )}
-              </div>
+        {photos.length === 0 ? (
+            <div className="text-center text-gray-500 p-12">
+                <p className="text-lg">No photos added yet. Click "Add New Photo" to begin!</p>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
-              <h3 className="font-semibold text-gray-800 mb-2">📋 How to Play:</h3>
-              <div className="grid md:grid-cols-2 gap-2 text-sm text-gray-600">
-                <div> Look at the photo and say what you see.</div>
-                <div> Click the microphone to start speaking.</div>
-              </div>
+        ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {photos.map((photo, index) => (
+                <PhotoEntry
+                    key={photo.id}
+                    photo={photo}
+                    onMicClick={() => handleMicClick(index)}
+                    isRecording={recordingStates[index] || false}
+                    feedback={feedback[index]}
+                    speechSupported={speechSupported}
+                    networkError={networkError}
+                    onEdit={handleEditPhoto}
+                    onDelete={handleDeletePhoto}
+                />
+                ))}
             </div>
-          </div>
-
-          {/* Photo Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {photos.map((photo, index) => (
-              <PhotoEntry
-                key={photo.id}
-                imageUrl={photo.imageUrl}
-                onMicClick={() => handleMicClick(index)}
-                isRecording={recordingStates[index] || false}
-                feedback={feedback[index]}
-                speechSupported={speechSupported}
-                networkError={networkError}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Photo Add/Edit Modal */}
       <Modal
