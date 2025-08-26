@@ -38,6 +38,7 @@ const PhotoForm = ({ photo, onSave, onCancel }) => {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    // Clean up object URL when component unmounts or photo changes
     return () => {
       if (imagePreview && imagePreview.startsWith("blob:")) {
         URL.revokeObjectURL(imagePreview);
@@ -347,7 +348,7 @@ const ContactContent = () => {
       <div className="flex flex-col md:flex-row justify-between items-center mb-8">
         <div className="text-center md:text-left mb-4 md:mb-0">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">
-            🧠 Photo Memory Game
+             Photo Memory Game
           </h1>
           <p className="text-lg text-gray-600">
             {isCaregiverMode ? "Manage photo entries" : "Look at the photos and say what you see!"}
@@ -436,8 +437,8 @@ const ContactContent = () => {
             <div className="bg-white p-4 rounded-lg shadow-sm border">
               <h3 className="font-semibold text-gray-800 mb-2">📋 How to Play:</h3>
               <div className="grid md:grid-cols-2 gap-2 text-sm text-gray-600">
-                <div>• Look at the photo and say what you see.</div>
-                <div>• Click the microphone to start speaking.</div>
+                <div> Look at the photo and say what you see.</div>
+                <div> Click the microphone to start speaking.</div>
               </div>
             </div>
           </div>
