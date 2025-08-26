@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, HelpCircle, Pill, CheckSquare } from 'lucide-react';
+import { User, HelpCircle, Pill, CheckSquare, UserCircle, Edit3, Save, X, Plus, Trash2 } from 'lucide-react';
 import Quizzes from './Quizzes';
 import ContactContent from './ContactContent';
 import MedicineContent from './MedicineContent';
 import TaskContent from './TaskContent';
+import Profile from './Profile';
 import img8 from '../assets/img8.png';
+
 const Dashboard = ({ user }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -19,6 +21,9 @@ const Dashboard = ({ user }) => {
   };
 
   const [activeTab, setActiveTab] = useState(getCurrentTab());
+  const [isAddingPatient, setIsAddingPatient] = useState(false);
+  const [editingPatientId, setEditingPatientId] = useState(null);
+  const [patients, setPatients] = useState([]);
 
   // Update activeTab when URL changes
   useEffect(() => {
@@ -28,6 +33,111 @@ const Dashboard = ({ user }) => {
   const handleTabClick = (tab) => {
     setActiveTab(tab);
     navigate(`/dashboard/${tab}`);
+  };
+
+  // Check if we should show add patient button (only if no patients or in multi-patient mode)
+  const shouldShowAddButton = patients.length === 0 || patients.length > 1;
+
+  const handleAddPatient = () => {
+    const newPatient = {
+      id: `temp-${Date.now()}`,
+      name: '',
+      age: '',
+      gender: 'M',
+      address: '',
+      phone: '',
+      email: '',
+      blood: 'A+ve',
+      weight: '',
+      height: '',
+      stage: 1,
+      history: ''
+    };
+    
+    setPatients(prevPatients => [newPatient, ...prevPatients]);
+    setIsAddingPatient(true);
+  };
+
+  const handleEditPatient = (patientId) => {
+    setEditingPatientId(patientId);
+  };
+
+  const handleSavePatient = (patientId) => {
+    const patient = patients.find(p => p.id === patientId);
+    
+    // Validation
+    if (!patient.name.trim() || !patient.age || !patient.email.trim()) {
+      alert('Please fill in Name, Age, and Email fields');
+      return;
+    }
+
+    // If it's a new patient (temp ID), give it a proper ID
+    if (patientId.startsWith('temp-')) {
+      const properPatient = {
+        ...patient,
+        id: `1122${Date.now().toString().slice(-2)}`,
+        age: parseInt(patient.age) || 0,
+        weight: parseFloat(patient.weight) || 0,
+        height: parseFloat(patient.height) || 0
+      };
+      
+      setPatients(prevPatients => 
+        prevPatients.map(p => p.id === patientId ? properPatient : p)
+      );
+    } else {
+      // Update existing patient
+      setPatients(prevPatients => 
+        prevPatients.map(p => p.id === patientId ? {
+          ...p,
+          age: parseInt(p.age) || 0,
+          weight: parseFloat(p.weight) || 0,
+          height: parseFloat(p.height) || 0
+        } : p)
+      );
+    }
+
+    setIsAddingPatient(false);
+    setEditingPatientId(null);
+  };
+
+  const handleCancelEdit = (patientId) => {
+    if (patientId.startsWith('temp-')) {
+      // Remove the temporary patient
+      setPatients(prevPatients => prevPatients.filter(p => p.id !== patientId));
+      setIsAddingPatient(false);
+    } else {
+      setEditingPatientId(null);
+    }
+  };
+
+  const handleDeletePatient = (patientId) => {
+    if (window.confirm('Are you sure you want to delete this patient?')) {
+      setPatients(prevPatients => prevPatients.filter(patient => patient.id !== patientId));
+    }
+  };
+
+  const handleInputChange = (patientId, field, value) => {
+    setPatients(prevPatients => 
+      prevPatients.map(patient => 
+        patient.id === patientId 
+          ? { ...patient, [field]: value }
+          : patient
+      )
+    );
+  };
+
+  const isEditing = (patientId) => {
+    return editingPatientId === patientId || (isAddingPatient && patientId.startsWith('temp-'));
+  };
+
+  const getStageColor = (stage) => {
+    switch(stage) {
+      case 1: return 'bg-green-100 text-green-800';
+      case 2: return 'bg-yellow-100 text-yellow-800';
+      case 3: return 'bg-orange-100 text-orange-800';
+      case 4: return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   // Function to render the appropriate content based on active tab
@@ -41,102 +151,320 @@ const Dashboard = ({ user }) => {
         return <MedicineContent />;
       case 'tasks':
         return <TaskContent />;
+      case 'profile':
+        return <Profile user={user} />;
       case null:
       default:
         // Main Dashboard Content
         return (
-          <div className="p-6 overflow-y-auto bg-gray-50 min-h-full">
+          <div className="p-8 overflow-y-auto bg-gradient-to-br from-slate-50 to-blue-50 min-h-full">
             {/* Welcome Section */}
-            <div className="bg-white rounded-lg shadow-sm p-6 mb-6 flex items-center justify-between">
-              <div className="flex-1">
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome Caregiver!</h1>
-                <p className="text-gray-600 max-w-2xl">
-                  Keep track of your patients daily progress and overview of their routines. Let's not forget 
-                  to fight for those who can't remember!
-                </p>
-              </div>
-              <div className="hidden lg:block">
-                <div className="w-48 h-32 bg-gradient-to-br from-purple-400 to-blue-500 rounded-lg flex items-center justify-center">
-                  <div className="text-white text-center">
-                    <img src={img8} alt="img" className="" />
-                    <p className="text-sm font-medium">Caregiver Portal</p>
+            <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-400 to-blue-500 rounded-full -translate-y-16 translate-x-16 opacity-20"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-cyan-400 to-purple-400 rounded-full translate-y-12 -translate-x-12 opacity-20"></div>
+              
+              <div className="relative flex items-center justify-between">
+                <div className="flex-1">
+                  <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-3">
+                    Welcome Back, Caregiver! 👋
+                  </h1>
+                  <p className="text-gray-600 text-lg max-w-2xl leading-relaxed">
+                    Monitor your patients' daily progress and manage their care routines. 
+                    <span className="font-semibold text-purple-600"> Together, we remember what matters most.</span>
+                  </p>
+                  <div className="flex items-center mt-4 space-x-6">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 bg-green-400 rounded-full mr-2"></div>
+                      <span className="text-sm text-gray-600">{patients.length} Active Patients</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 bg-blue-400 rounded-full mr-2"></div>
+                      <span className="text-sm text-gray-600">All Systems Online</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="hidden lg:block">
+                  <div className="w-56 h-40 bg-gradient-to-br from-purple-500 via-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-300">
+                    <div className="text-white text-center">
+                      <img src={img8} alt="Caregiver Portal" className="mb-2 opacity-90" />
+                      <p className="text-sm font-semibold">Caregiver Portal</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Your Patients Section */}
-            <div className="bg-white rounded-lg shadow-sm">
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-800">Your Patients</h2>
-                <div className="flex space-x-3">
-                  <button className="bg-cyan-400 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                    Add Patient
-                  </button>
-                  <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                    Edit Patient
-                  </button>
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-1">Patient Management</h2>
+                    <p className="text-purple-100">Manage and track your patients' information</p>
+                  </div>
+                  {shouldShowAddButton && (
+                    <button 
+                      onClick={handleAddPatient}
+                      disabled={isAddingPatient}
+                      className="bg-white text-purple-600 hover:bg-purple-50 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                    >
+                      <Plus size={20} />
+                      <span>Add New Patient</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Patients Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-purple-600 text-white">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold">Patient ID</th>
-                      <th className="px-4 py-3 text-left font-semibold">Patient Name</th>
-                      <th className="px-4 py-3 text-left font-semibold">Age</th>
-                      <th className="px-4 py-3 text-left font-semibold">Gender</th>
-                      <th className="px-4 py-3 text-left font-semibold">Address</th>
-                      <th className="px-4 py-3 text-left font-semibold">Phone</th>
-                      <th className="px-4 py-3 text-left font-semibold">Email</th>
-                      <th className="px-4 py-3 text-left font-semibold">Blood</th>
-                      <th className="px-4 py-3 text-left font-semibold">Weight</th>
-                      <th className="px-4 py-3 text-left font-semibold">Height</th>
-                      <th className="px-4 py-3 text-left font-semibold">Stage</th>
-                      <th className="px-4 py-3 text-left font-semibold">History</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    <tr className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-900">112233</td>
-                      <td className="px-4 py-3 text-gray-900 font-medium">Stella</td>
-                      <td className="px-4 py-3 text-gray-900">56</td>
-                      <td className="px-4 py-3 text-gray-900">F</td>
-                      <td className="px-4 py-3 text-gray-900 text-sm">14, XYZ street, XYZ colony, XYZ</td>
-                      <td className="px-4 py-3 text-gray-900">9876543210</td>
-                      <td className="px-4 py-3 text-gray-900 text-sm">stella@gmail.com</td>
-                      <td className="px-4 py-3 text-gray-900">B+ve</td>
-                      <td className="px-4 py-3 text-gray-900">60</td>
-                      <td className="px-4 py-3 text-gray-900">175</td>
-                      <td className="px-4 py-3 text-gray-900">2</td>
-                      <td className="px-4 py-3 text-gray-900 text-sm max-w-xs">
-                        Currently under stage 2 medication with a 65% recurring memory.
-                      </td>
-                    </tr>
-                    {/* Add more sample rows if needed */}
-                    <tr className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-900">112234</td>
-                      <td className="px-4 py-3 text-gray-900 font-medium">John</td>
-                      <td className="px-4 py-3 text-gray-900">68</td>
-                      <td className="px-4 py-3 text-gray-900">M</td>
-                      <td className="px-4 py-3 text-gray-900 text-sm">25, ABC road, ABC city</td>
-                      <td className="px-4 py-3 text-gray-900">9876543211</td>
-                      <td className="px-4 py-3 text-gray-900 text-sm">john@gmail.com</td>
-                      <td className="px-4 py-3 text-gray-900">A+ve</td>
-                      <td className="px-4 py-3 text-gray-900">75</td>
-                      <td className="px-4 py-3 text-gray-900">180</td>
-                      <td className="px-4 py-3 text-gray-900">1</td>
-                      <td className="px-4 py-3 text-gray-900 text-sm max-w-xs">
-                        Early stage dementia, good response to treatment.
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="">
-                 <button className="">Download Report</button>
+              {/* Patients Cards Grid */}
+              <div className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {patients.map((patient) => (
+                    <div key={patient.id} className={`bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border ${isEditing(patient.id) ? 'border-blue-400 shadow-blue-200' : 'border-gray-200'}`}>
+                      {/* Patient Header */}
+                      <div className="bg-gradient-to-r from-gray-800 to-gray-700 p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            {isEditing(patient.id) ? (
+                              <input
+                                type="text"
+                                value={patient.name}
+                                onChange={(e) => handleInputChange(patient.id, 'name', e.target.value)}
+                                className="bg-white text-gray-800 px-3 py-1 rounded-lg font-semibold text-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                placeholder="Enter patient name"
+                              />
+                            ) : (
+                              <h3 className="text-white font-semibold text-lg">
+                                {patient.name || 'New Patient'}
+                              </h3>
+                            )}
+                            <p className="text-gray-300 text-sm mt-1">
+                              ID: {patient.id.startsWith('temp-') ? 'Pending' : patient.id}
+                            </p>
+                          </div>
+                          <div className={`px-3 py-1 rounded-full text-xs font-semibold ${getStageColor(patient.stage)}`}>
+                            Stage {patient.stage}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Patient Details */}
+                      <div className="p-4 space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Age</label>
+                            {isEditing(patient.id) ? (
+                              <input
+                                type="number"
+                                value={patient.age}
+                                onChange={(e) => handleInputChange(patient.id, 'age', e.target.value)}
+                                className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              />
+                            ) : (
+                              <p className="text-gray-800 font-medium">{patient.age} years</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Gender</label>
+                            {isEditing(patient.id) ? (
+                              <select
+                                value={patient.gender}
+                                onChange={(e) => handleInputChange(patient.id, 'gender', e.target.value)}
+                                className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              >
+                                <option value="M">Male</option>
+                                <option value="F">Female</option>
+                              </select>
+                            ) : (
+                              <p className="text-gray-800 font-medium">{patient.gender === 'M' ? 'Male' : 'Female'}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</label>
+                          {isEditing(patient.id) ? (
+                            <input
+                              type="email"
+                              value={patient.email}
+                              onChange={(e) => handleInputChange(patient.id, 'email', e.target.value)}
+                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              placeholder="patient@email.com"
+                            />
+                          ) : (
+                            <p className="text-gray-800 font-medium truncate">{patient.email}</p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phone</label>
+                          {isEditing(patient.id) ? (
+                            <input
+                              type="tel"
+                              value={patient.phone}
+                              onChange={(e) => handleInputChange(patient.id, 'phone', e.target.value)}
+                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              placeholder="Phone number"
+                            />
+                          ) : (
+                            <p className="text-gray-800 font-medium">{patient.phone}</p>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Blood</label>
+                            {isEditing(patient.id) ? (
+                              <select
+                                value={patient.blood}
+                                onChange={(e) => handleInputChange(patient.id, 'blood', e.target.value)}
+                                className="w-full mt-1 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
+                              >
+                                <option value="A+ve">A+</option>
+                                <option value="A-ve">A-</option>
+                                <option value="B+ve">B+</option>
+                                <option value="B-ve">B-</option>
+                                <option value="AB+ve">AB+</option>
+                                <option value="AB-ve">AB-</option>
+                                <option value="O+ve">O+</option>
+                                <option value="O-ve">O-</option>
+                              </select>
+                            ) : (
+                              <p className="text-gray-800 font-medium">{patient.blood}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Weight</label>
+                            {isEditing(patient.id) ? (
+                              <input
+                                type="number"
+                                value={patient.weight}
+                                onChange={(e) => handleInputChange(patient.id, 'weight', e.target.value)}
+                                className="w-full mt-1 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
+                                placeholder="kg"
+                              />
+                            ) : (
+                              <p className="text-gray-800 font-medium">{patient.weight} kg</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Height</label>
+                            {isEditing(patient.id) ? (
+                              <input
+                                type="number"
+                                value={patient.height}
+                                onChange={(e) => handleInputChange(patient.id, 'height', e.target.value)}
+                                className="w-full mt-1 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
+                                placeholder="cm"
+                              />
+                            ) : (
+                              <p className="text-gray-800 font-medium">{patient.height} cm</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Address</label>
+                          {isEditing(patient.id) ? (
+                            <textarea
+                              value={patient.address}
+                              onChange={(e) => handleInputChange(patient.id, 'address', e.target.value)}
+                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              rows="2"
+                              placeholder="Patient address"
+                            />
+                          ) : (
+                            <p className="text-gray-800 font-medium text-sm">{patient.address}</p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Medical History</label>
+                          {isEditing(patient.id) ? (
+                            <textarea
+                              value={patient.history}
+                              onChange={(e) => handleInputChange(patient.id, 'history', e.target.value)}
+                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              rows="2"
+                              placeholder="Medical history and notes"
+                            />
+                          ) : (
+                            <p className="text-gray-800 font-medium text-sm">{patient.history}</p>
+                          )}
+                        </div>
+
+                        {isEditing(patient.id) && (
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Stage</label>
+                            <select
+                              value={patient.stage}
+                              onChange={(e) => handleInputChange(patient.id, 'stage', parseInt(e.target.value))}
+                              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            >
+                              <option value={1}>Stage 1 - Mild</option>
+                              <option value={2}>Stage 2 - Moderate</option>
+                              <option value={3}>Stage 3 - Severe</option>
+                              <option value={4}>Stage 4 - Critical</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="bg-gray-50 p-4 flex space-x-2">
+                        {isEditing(patient.id) ? (
+                          <>
+                            <button
+                              onClick={() => handleSavePatient(patient.id)}
+                              className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                            >
+                              <Save size={16} />
+                              <span>Save</span>
+                            </button>
+                            <button
+                              onClick={() => handleCancelEdit(patient.id)}
+                              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                            >
+                              <X size={16} />
+                              <span>Cancel</span>
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleEditPatient(patient.id)}
+                              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                            >
+                              <Edit3 size={16} />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeletePatient(patient.id)}
+                              className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center shadow-lg hover:shadow-xl"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {patients.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="text-gray-400 mb-4">
+                      <User size={48} className="mx-auto" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-600 mb-2">No Patients Yet</h3>
+                    <p className="text-gray-500">Click "Add New Patient" to get started</p>
+                  </div>
+                )}
+
+                <div className="mt-8 flex justify-center">
+                  <button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+                    📊 Download Patient Report
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -146,56 +474,72 @@ const Dashboard = ({ user }) => {
 
   return (
     <div className="grid h-screen grid-cols-3 lg:grid-cols-5 bg-gray-100">
-      {/* Sidebar - This stays fixed */}
-      <div className="bg-indigo-600 col-span-1 flex flex-col">
+      {/* Sidebar - Enhanced Design */}
+      <div className="bg-gradient-to-b from-indigo-700 via-indigo-600 to-purple-600 col-span-1 flex flex-col shadow-2xl">
         <div className="pt-8 px-6 pb-8">
-          <h1 className="text-white font-bold text-2xl lg:text-3xl">Memory Box</h1>
+          <h1 className="text-white font-bold text-2xl lg:text-3xl bg-gradient-to-r from-white to-purple-100 bg-clip-text text-transparent">
+            🧠 Memory Box
+          </h1>
+          <p className="text-indigo-200 text-sm mt-2">Caring for memories</p>
         </div>
         
         <nav className="flex-1 px-4 space-y-2">
           <button
             onClick={() => handleTabClick('quizzes')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
-              activeTab === 'quizzes' ? 'bg-indigo-700 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${
+              activeTab === 'quizzes' ? 'bg-white/20 text-white shadow-lg' : 'text-indigo-200 hover:bg-white/10 hover:text-white'
             }`}
           >
-            <HelpCircle size={20} />
+            <HelpCircle size={20} className="group-hover:scale-110 transition-transform" />
             <span className="font-medium">Quizzes</span>
           </button>
           
           <button
             onClick={() => handleTabClick('contact')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
-              activeTab === 'contact' ? 'bg-indigo-700 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${
+              activeTab === 'contact' ? 'bg-white/20 text-white shadow-lg' : 'text-indigo-200 hover:bg-white/10 hover:text-white'
             }`}
           >
-            <User size={20} />
+            <User size={20} className="group-hover:scale-110 transition-transform" />
             <span className="font-medium">Contact</span>
           </button>
           
           <button
             onClick={() => handleTabClick('medicines')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
-              activeTab === 'medicines' ? 'bg-indigo-700 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${
+              activeTab === 'medicines' ? 'bg-white/20 text-white shadow-lg' : 'text-indigo-200 hover:bg-white/10 hover:text-white'
             }`}
           >
-            <Pill size={20} />
+            <Pill size={20} className="group-hover:scale-110 transition-transform" />
             <span className="font-medium">Medicines</span>
           </button>
           
           <button
             onClick={() => handleTabClick('tasks')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
-              activeTab === 'tasks' ? 'bg-indigo-700 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white'
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${
+              activeTab === 'tasks' ? 'bg-white/20 text-white shadow-lg' : 'text-indigo-200 hover:bg-white/10 hover:text-white'
             }`}
           >
-            <CheckSquare size={20} />
+            <CheckSquare size={20} className="group-hover:scale-110 transition-transform" />
             <span className="font-medium">Tasks</span>
           </button>
         </nav>
+
+        {/* Profile Section at Bottom */}
+        <div className="px-4 pb-6">
+          <button
+            onClick={() => handleTabClick('profile')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${
+              activeTab === 'profile' ? 'bg-white/20 text-white shadow-lg' : 'text-indigo-200 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <UserCircle size={20} className="group-hover:scale-110 transition-transform" />
+            <span className="font-medium">Profile</span>
+          </button>
+        </div>
       </div>
 
-      {/* Main Content Area - This changes based on active tab */}
+      {/* Main Content Area */}
       <div className="bg-white col-span-2 lg:col-span-4 flex flex-col overflow-hidden">
         {renderContent()}
       </div>

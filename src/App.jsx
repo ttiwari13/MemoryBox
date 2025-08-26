@@ -7,7 +7,7 @@ import SignModal from './pages/SignModal';
 import Dashboard from './pages/Dashboard';
 import Footer from './components/Footer';
 
-// Protected Route
+// Protected Route Component
 const ProtectedRoute = ({ children, user }) => {
   if (!user) {
     return <Navigate to="/" replace />;
@@ -15,7 +15,7 @@ const ProtectedRoute = ({ children, user }) => {
   return children;
 };
 
-// Main App Content
+// Main App Content with all logic
 function AppContent() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,7 +23,6 @@ function AppContent() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check session
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -37,19 +36,18 @@ function AppContent() {
 
     checkSession();
 
-    // Auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event);
-        
         if (event === 'SIGNED_IN') {
           setUser(session?.user ?? null);
           setActiveModal(null);
-          navigate('/dashboard'); // Navigate to dashboard
+          // Navigate to main dashboard, not sub-route
+          navigate('/dashboard');
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setActiveModal(null);
-          navigate('/'); // Go back to home on logout
+          navigate('/');
         }
       }
     );
@@ -57,7 +55,6 @@ function AppContent() {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Modal functions
   const openLoginModal = () => setActiveModal('login');
   const openSignupModal = () => setActiveModal('signup');
   const closeModal = () => setActiveModal(null);
@@ -66,18 +63,20 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading Memory Box...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <>
-      {/* Main Content */}
       <div className={`${activeModal ? 'blur-sm' : ''} transition-all duration-300`}>
         <Routes>
-          {/* HOME PAGE - Default route */}
+          {/* Home Route */}
           <Route 
             path="/" 
             element={
@@ -88,9 +87,9 @@ function AppContent() {
             } 
           />
           
-          {/* DASHBOARD - Protected route */}
+          {/* Dashboard Routes - Proper hierarchy with wildcard matching */}
           <Route 
-            path="/dashboard" 
+            path="/dashboard/*" 
             element={
               <ProtectedRoute user={user}>
                 <Dashboard user={user} />
@@ -98,49 +97,11 @@ function AppContent() {
             } 
           />
           
-          {/* DASHBOARD SUB-ROUTES - Protected routes */}
-          <Route 
-            path="/dashboard/quizzes" 
-            element={
-              <ProtectedRoute user={user}>
-                <Dashboard user={user} />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/dashboard/contact" 
-            element={
-              <ProtectedRoute user={user}>
-                <Dashboard user={user} />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/dashboard/medicines" 
-            element={
-              <ProtectedRoute user={user}>
-                <Dashboard user={user} />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/dashboard/tasks" 
-            element={
-              <ProtectedRoute user={user}>
-                <Dashboard user={user} />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Redirect any unknown routes to HOME */}
+          {/* Catch-all redirect to home */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
 
-      {/* Modals */}
       {activeModal === 'login' && (
         <LoginModal 
           onClose={closeModal}
@@ -158,12 +119,12 @@ function AppContent() {
   );
 }
 
-// Main App Wrapper
+// Main App Wrapper for Router
 function App() {
   return (
    
       <AppContent />
-    
+   
   );
 }
 
