@@ -75,7 +75,7 @@ const PhotoForm = ({ photo, onSave, onCancel }) => {
             <button
               type="button"
               onClick={() => fileInputRef.current.click()}
-              className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors flex items-center space-x-2"
+              className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-secondary transition-colors flex items-center space-x-2"
             >
               <ImageIcon size={18} />
               <span>Choose File</span>
@@ -101,7 +101,7 @@ const PhotoForm = ({ photo, onSave, onCancel }) => {
             name="correctAnswer"
             value={currentPhoto.correctAnswer}
             onChange={handleChange}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
             placeholder="e.g., apple"
             required
           />
@@ -117,7 +117,7 @@ const PhotoForm = ({ photo, onSave, onCancel }) => {
         </button>
         <button
           type="submit"
-          className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors font-medium"
+          className="bg-primary hover:bg-secondary text-white px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors font-medium"
         >
           <Save size={18} />
           <span>{currentPhoto.id ? "Save Changes" : "Add Photo"}</span>
@@ -127,7 +127,7 @@ const PhotoForm = ({ photo, onSave, onCancel }) => {
   );
 };
 
-// Simple Photo Entry Component (Patient/Caregiver View)
+// Simple Photo Entry Component
 const PhotoEntry = ({
   photo,
   onMicClick,
@@ -151,57 +151,83 @@ const PhotoEntry = ({
   };
 
   return (
-    <div className="flex flex-col items-center p-4 rounded-xl shadow-lg border-2 border-gray-200 bg-white">
-      <div className="relative w-full h-48 mb-4 overflow-hidden rounded-lg">
+    <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+      {/* Image Section */}
+      <div className="relative h-64">
         <img
           src={photo.imageUrl}
           alt={photo.correctAnswer}
           className="w-full h-full object-cover"
         />
-        <div className="absolute top-2 right-2 flex space-x-2">
-            <button onClick={() => onEdit(photo)} className="p-2 text-blue-500 bg-white rounded-full hover:bg-blue-100 transition-colors">
-              <Edit3 size={18} />
-            </button>
-            <button onClick={() => onDelete(photo.id)} className="p-2 text-red-500 bg-white rounded-full hover:bg-red-100 transition-colors">
-              <Trash2 size={18} />
-            </button>
+        
+        {/* Action Buttons */}
+        <div className="absolute top-3 right-3 flex space-x-2">
+          <button 
+            onClick={() => onEdit(photo)} 
+            className="p-2 bg-white text-blue-600 rounded-full hover:bg-blue-50 transition-colors shadow-md"
+          >
+            <Edit3 size={18} />
+          </button>
+          <button 
+            onClick={() => onDelete(photo.id)} 
+            className="p-2 bg-white text-red-600 rounded-full hover:bg-red-50 transition-colors shadow-md"
+          >
+            <Trash2 size={18} />
+          </button>
+        </div>
+
+        {/* Correct Answer */}
+        <div className="absolute bottom-3 left-3 bg-white/90 px-3 py-1 rounded-full">
+          <span className="text-sm font-medium text-gray-700">Answer: {photo.correctAnswer}</span>
         </div>
       </div>
 
-      <div className="w-full space-y-4">
+      {/* Controls Section */}
+      <div className="p-6 space-y-4">
         {speechSupported && (
           <button
             onClick={onMicClick}
-            className={`w-full flex items-center justify-center space-x-2 p-4 rounded-lg font-medium transition-all duration-200 ${
+            className={`w-full flex items-center justify-center space-x-3 p-4 rounded-lg font-medium text-lg transition-all duration-200 ${
               isRecording
-                ? "bg-red-500 hover:bg-red-600 text-white shadow-lg animate-pulse"
-                : "bg-blue-500 hover:bg-blue-600 text-white shadow-md"
+                ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
+                : "bg-primary hover:bg-secondary text-white"
             }`}
           >
             {isRecording ? (
               <>
-                <Square size={20} />
+                <Square size={24} />
                 <span>Stop Recording</span>
               </>
             ) : (
               <>
-                <Mic size={20} />
-                <span>Speak Answer</span>
+                <Mic size={24} />
+                <span>Start Speaking</span>
               </>
             )}
           </button>
         )}
         
+        {!speechSupported && (
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+            <p className="text-yellow-700 text-center font-medium">
+              Microphone not supported in this browser
+            </p>
+          </div>
+        )}
+        
         {feedback && (
-          <div className={`flex items-center justify-center space-x-2 p-3 rounded-lg font-bold text-lg transition-all ${getFeedbackColorClass()}`}>
+          <div className={`flex items-center justify-center space-x-3 p-4 rounded-lg font-bold text-xl transition-all ${getFeedbackColorClass()}`}>
             {getFeedbackIcon()}
-            <span>{feedback === "correct" ? "Correct!" : "Incorrect"}</span>
+            <span>{feedback === "correct" ? "Correct!" : "Try Again!"}</span>
           </div>
         )}
 
         {networkError && (
-          <div className="text-center text-red-500 text-sm mt-2">
-            Network error. Please check your connection and try again.
+          <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+            <div className="flex items-center space-x-2 text-red-600">
+              <X size={18} />
+              <span className="font-medium text-sm">Network error. Please try again.</span>
+            </div>
           </div>
         )}
       </div>
@@ -221,7 +247,7 @@ const ContactContent = () => {
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const recordingTimeoutRef = useRef(null);
+  const streamRef = useRef(null);
 
   useEffect(() => {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -229,7 +255,36 @@ const ContactContent = () => {
     } else {
       setSpeechSupported(false);
     }
+
+    // Load saved photos from storage
+    loadPhotosFromStorage();
   }, []);
+
+  // Save photos to storage whenever photos array changes
+  useEffect(() => {
+    if (photos.length > 0) {
+      savePhotosToStorage(photos);
+    }
+  }, [photos]);
+
+  // Storage functions
+  const savePhotosToStorage = (photosData) => {
+    if (!window.memoryBoxStorage) {
+      window.memoryBoxStorage = {};
+    }
+    window.memoryBoxStorage.contactPhotos = JSON.stringify(photosData);
+  };
+
+  const loadPhotosFromStorage = () => {
+    try {
+      if (window.memoryBoxStorage && window.memoryBoxStorage.contactPhotos) {
+        const storedPhotos = JSON.parse(window.memoryBoxStorage.contactPhotos);
+        setPhotos(storedPhotos);
+      }
+    } catch (error) {
+      console.error('Error loading photos from storage:', error);
+    }
+  };
 
   const handleMicClick = async (index) => {
     if (!speechSupported) {
@@ -237,28 +292,46 @@ const ContactContent = () => {
       return;
     }
 
+    // If currently recording, stop recording
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
-    } else {
-      setRecordingStates(prev => ({ ...prev, [index]: true }));
-      setNetworkError(false);
-      await startGeminiSpeechRecognition(index);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      return;
     }
+
+    // Start recording
+    setRecordingStates(prev => ({ ...prev, [index]: true }));
+    setNetworkError(false);
+    setFeedback(prev => ({ ...prev, [index]: null }));
+    await startSpeechRecognition(index);
   };
   
-  const startGeminiSpeechRecognition = async (index) => {
+  const startSpeechRecognition = async (index) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
       };
 
       mediaRecorderRef.current.onstop = async () => {
+        setRecordingStates(prev => ({ ...prev, [index]: false }));
+        
+        if (audioChunksRef.current.length === 0) {
+          setNetworkError(true);
+          return;
+        }
+
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
+        
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
           const base64Audio = reader.result;
@@ -273,8 +346,13 @@ const ContactContent = () => {
                 mimeType: 'audio/webm',
               }),
             });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
-            if (data.transcript) {
+            if (data.transcript && data.transcript.trim()) {
               validateAnswer(index, data.transcript);
             } else {
               setNetworkError(true);
@@ -282,18 +360,11 @@ const ContactContent = () => {
           } catch (error) {
             console.error("Transcription API error:", error);
             setNetworkError(true);
-          } finally {
-             setRecordingStates(prev => ({ ...prev, [index]: false }));
           }
         };
       };
 
       mediaRecorderRef.current.start();
-      recordingTimeoutRef.current = setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-          mediaRecorderRef.current.stop();
-        }
-      }, 5000); // Stop recording after 5 seconds
       
     } catch (err) {
       console.error('Microphone access error:', err);
@@ -303,9 +374,13 @@ const ContactContent = () => {
   };
 
   const validateAnswer = (index, userAnswer) => {
-    const correctAnswer = photos[index].correctAnswer.toLowerCase();
+    const correctAnswer = photos[index].correctAnswer.toLowerCase().trim();
     const userInput = userAnswer.toLowerCase().trim();
-    const isCorrect = userInput.includes(correctAnswer) || correctAnswer.includes(userInput);
+    
+    const words = correctAnswer.split(/\s+/);
+    const isCorrect = words.some(word => userInput.includes(word)) || 
+                     userInput.includes(correctAnswer) ||
+                     correctAnswer.includes(userInput);
 
     setFeedback(prev => ({
       ...prev,
@@ -317,10 +392,9 @@ const ContactContent = () => {
         ...prev,
         [index]: null,
       }));
-    }, 3000);
+    }, 4000);
   };
 
-  // Caregiver Handlers
   const handleAddPhoto = (newPhoto) => {
     if (newPhoto.id) {
       setPhotos(photos.map(p => (p.id === newPhoto.id ? newPhoto : p)));
@@ -337,11 +411,19 @@ const ContactContent = () => {
   };
 
   const handleDeletePhoto = (id) => {
-    setPhotos(photos.filter(p => p.id !== id));
+    if (window.confirm('Are you sure you want to delete this photo?')) {
+      setPhotos(photos.filter(p => p.id !== id));
+      
+      if (photos.length === 1) {
+        if (window.memoryBoxStorage) {
+          delete window.memoryBoxStorage.contactPhotos;
+        }
+      }
+    }
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-gray-50 min-h-screen">
+    <div className="p-8 overflow-y-auto bg-gradient-to-br from-slate-50 to-blue-50 min-h-full">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8">
         <div className="text-center md:text-left mb-4 md:mb-0">
@@ -349,52 +431,59 @@ const ContactContent = () => {
             Photo Memory Game
           </h1>
           <p className="text-lg text-gray-600">
-            Manage your photos and have the patient speak the answers directly from here.
+            Upload photos and let patients speak their answers using voice recognition.
           </p>
         </div>
         
-        {/* Add New Photo Button */}
         <button
           onClick={() => {
             setEditingPhoto(null);
             setIsFormModalOpen(true);
           }}
-          className="flex items-center space-x-2 px-4 py-2 rounded-full bg-primary text-white font-medium hover:bg-secondary transition-colors shadow-md"
+          className="flex items-center space-x-2 px-6 py-3 bg-primary hover:bg-secondary text-white font-medium rounded-lg transition-colors shadow-md"
         >
           <Plus size={18} />
           <span>Add New Photo</span>
         </button>
       </div>
 
-      {/* Main Photo Grid (Caregiver View) */}
-      <div className="space-y-6">
-        <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">
-            Your Photo Library
-          </h2>
+      {/* Photo Grid */}
+      {photos.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-xl shadow-lg">
+          <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ImageIcon size={36} className="text-gray-500" />
+          </div>
+          <h3 className="text-2xl font-semibold text-gray-600 mb-4">No Photos Yet</h3>
+          <p className="text-gray-500 text-lg mb-6">
+            Add your first photo to start memory training exercises.
+          </p>
+          <button
+            onClick={() => {
+              setEditingPhoto(null);
+              setIsFormModalOpen(true);
+            }}
+            className="bg-primary hover:bg-secondary text-white px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            Add Your First Photo
+          </button>
         </div>
-        {photos.length === 0 ? (
-            <div className="text-center text-gray-500 p-12">
-                <p className="text-lg">No photos added yet. Click "Add New Photo" to begin!</p>
-            </div>
-        ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {photos.map((photo, index) => (
-                <PhotoEntry
-                    key={photo.id}
-                    photo={photo}
-                    onMicClick={() => handleMicClick(index)}
-                    isRecording={recordingStates[index] || false}
-                    feedback={feedback[index]}
-                    speechSupported={speechSupported}
-                    networkError={networkError}
-                    onEdit={handleEditPhoto}
-                    onDelete={handleDeletePhoto}
-                />
-                ))}
-            </div>
-        )}
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {photos.map((photo, index) => (
+            <PhotoEntry
+              key={photo.id}
+              photo={photo}
+              onMicClick={() => handleMicClick(index)}
+              isRecording={recordingStates[index] || false}
+              feedback={feedback[index]}
+              speechSupported={speechSupported}
+              networkError={networkError}
+              onEdit={handleEditPhoto}
+              onDelete={handleDeletePhoto}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Photo Add/Edit Modal */}
       <Modal
