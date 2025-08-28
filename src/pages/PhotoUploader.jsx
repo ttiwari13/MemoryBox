@@ -384,4 +384,4 @@ const ContactContent = () => {
   );
 };
 
-export default ContactContent;
+export default PhotoUploader;

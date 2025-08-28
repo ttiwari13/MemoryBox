@@ -346,7 +346,7 @@ const ContactContent = () => {
       <div className="flex flex-col md:flex-row justify-between items-center mb-8">
         <div className="text-center md:text-left mb-4 md:mb-0">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">
-            🧠 Photo Memory Game
+            Photo Memory Game
           </h1>
           <p className="text-lg text-gray-600">
             Manage your photos and have the patient speak the answers directly from here.
@@ -359,7 +359,7 @@ const ContactContent = () => {
             setEditingPhoto(null);
             setIsFormModalOpen(true);
           }}
-          className="flex items-center space-x-2 px-4 py-2 rounded-full bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors shadow-md"
+          className="flex items-center space-x-2 px-4 py-2 rounded-full bg-primary text-white font-medium hover:bg-secondary transition-colors shadow-md"
         >
           <Plus size={18} />
           <span>Add New Photo</span>

@@ -42,8 +42,7 @@ function AppContent() {
         if (event === 'SIGNED_IN') {
           setUser(session?.user ?? null);
           setActiveModal(null);
-          // Navigate to main dashboard, not sub-route
-          navigate('/dashboard');
+         // navigate('/dashboard');
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setActiveModal(null);

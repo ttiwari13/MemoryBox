@@ -49,12 +49,12 @@ const TaskContent = ({ patients = [] }) => {
     return () => clearInterval(timer);
   }, []);
 
+  // Initialize new task with first patient if available
   useEffect(() => {
-    if (patients.length > 0) {
+    if (patients.length > 0 && !newTask.patientId) {
       setNewTask(prev => ({ ...prev, patientId: patients[0].id }));
-      setFilterPatientId(patients[0].id);
     }
-  }, [patients]);
+  }, [patients, newTask.patientId]);
 
   const taskTypes = {
     medication: { icon: Pill, color: 'bg-red-100 text-red-600', name: 'Medication' },
@@ -102,13 +102,17 @@ const TaskContent = ({ patients = [] }) => {
       type: task.type,
       title: task.title,
       time: task.time,
-      notes: task.notes
+      notes: task.notes || ''
     });
     setShowAddModal(true);
   };
 
   const saveTask = () => {
-    if (!newTask.title || !newTask.time || !newTask.patientId) return;
+    // Check if required fields are filled
+    if (!newTask.title || !newTask.time) {
+      alert("Please fill out all required fields (Title and Time).");
+      return;
+    }
 
     if (editingTask) {
       // Update existing task
@@ -121,15 +125,21 @@ const TaskContent = ({ patients = [] }) => {
     } else {
       // Add new task
       const task = {
-        id: Date.now(),
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // More unique ID
         ...newTask,
         status: 'pending',
-        date: new Date().toISOString().split('T')[0]
+        // Use the selectedDate for the new task
+        date: selectedDate.toISOString().split('T')[0]
       };
       setTasks(prev => [...prev, task]);
     }
 
-    // Reset form
+    // Reset form and close modal
+    resetForm();
+    setShowAddModal(false);
+  };
+
+  const resetForm = () => {
     setNewTask({
       patientId: patients.length > 0 ? patients[0].id : '',
       type: 'medication',
@@ -137,7 +147,7 @@ const TaskContent = ({ patients = [] }) => {
       time: '',
       notes: ''
     });
-    setShowAddModal(false);
+    setEditingTask(null);
   };
 
   const filteredTasks = tasks.filter(task => {
@@ -177,20 +187,24 @@ const TaskContent = ({ patients = [] }) => {
     setFilterPatientId('all');
   };
 
-  return (
-    <div className="p-4 sm:p-6 overflow-y-auto bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">Task Management</h1>
-        <p className="text-base sm:text-lg text-gray-600">Track daily activities and care tasks for your patients</p>
-      </div>
+  const handleAddTaskClick = () => {
+    resetForm();
+    setShowAddModal(true);
+  };
 
+  const handleCloseModal = () => {
+    setShowAddModal(false);
+    resetForm();
+  };
+
+  return (
+    <div className="p-4 sm:p-6 overflow-y-auto bg-white min-h-screen">
       {/* Current Time & Date */}
       <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6 sm:mb-8 border border-gray-100">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0">
           <div className="flex items-center space-x-2 sm:space-x-4">
-            <div className="bg-indigo-100 p-2 sm:p-3 rounded-full">
-              <Calendar className="text-indigo-600" size={20} sm:size={28} />
+            <div className="bg-primary/20 p-2 sm:p-3 rounded-full">
+              <Calendar className="text-primary" size={24} />
             </div>
             <div>
               <h3 className="text-lg sm:text-xl font-semibold text-gray-800">
@@ -211,8 +225,8 @@ const TaskContent = ({ patients = [] }) => {
             </div>
           </div>
           <button 
-            onClick={() => setShowAddModal(true)}
-            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
+            onClick={handleAddTaskClick}
+            className="w-full sm:w-auto bg-primary hover:bg-secondary text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
           >
             <Plus size={20} />
             <span className="font-medium">Add Task</span>
@@ -229,21 +243,21 @@ const TaskContent = ({ patients = [] }) => {
               {(filterType !== 'all' || filterStatus !== 'all' || filterPatientId !== 'all') && (
                 <button
                   onClick={clearAllFilters}
-                  className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                  className="text-primary hover:text-secondary text-sm font-medium"
                 >
                   Clear All
                 </button>
               )}
             </div>
             
-            {/* Patient Filter */}
-            {patients.length > 0 && (
+            {/* Patient Filter - Hidden for single patient */}
+            {patients.length > 1 && (
               <div className="mb-4 sm:mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Patient</label>
                 <select
                   value={filterPatientId}
                   onChange={(e) => setFilterPatientId(e.target.value)}
-                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                   <option value="all">All Patients</option>
                   {patients.map(patient => (
@@ -266,7 +280,7 @@ const TaskContent = ({ patients = [] }) => {
                       onClick={() => setFilterType(filterType === type ? 'all' : type)}
                       className={`p-2 rounded-lg flex items-center space-x-2 transition-all duration-200 ${
                         filterType === type 
-                          ? 'bg-indigo-100 border-2 border-indigo-300 shadow-md' 
+                          ? 'bg-primary/20 border-2 border-primary/40 shadow-md' 
                           : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
                       }`}
                     >
@@ -302,7 +316,7 @@ const TaskContent = ({ patients = [] }) => {
                       onClick={() => setFilterStatus(status.key)}
                       className={`w-full p-2 sm:p-3 rounded-lg text-left transition-all duration-200 flex items-center space-x-3 ${
                         filterStatus === status.key 
-                          ? 'bg-indigo-100 text-indigo-800 border-2 border-indigo-300' 
+                          ? 'bg-primary/20 text-primary border-2 border-primary/40' 
                           : 'hover:bg-gray-100 border-2 border-transparent'
                       }`}
                     >
@@ -340,6 +354,7 @@ const TaskContent = ({ patients = [] }) => {
               {getTasksForToday().map(task => {
                 const taskConfig = taskTypes[task.type];
                 const Icon = taskConfig?.icon || Clock;
+                const patientName = patients.length > 0 ? getPatientName(task.patientId) : 'Patient';
                 
                 return (
                   <div key={task.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
@@ -347,7 +362,7 @@ const TaskContent = ({ patients = [] }) => {
                       <div className="flex items-center space-x-2 sm:space-x-4 flex-1">
                         {/* Task Icon */}
                         <div className={`p-2 sm:p-3 rounded-full ${taskConfig?.color || 'bg-gray-100 text-gray-600'}`}>
-                          <Icon size={18} sm:size={22} />
+                          <Icon size={18} />
                         </div>
 
                         {/* Task Details */}
@@ -361,7 +376,7 @@ const TaskContent = ({ patients = [] }) => {
                           <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm text-gray-600">
                             <div className="flex items-center space-x-2">
                               <User size={14} />
-                              <span className="font-medium">{getPatientName(task.patientId)}</span>
+                              <span className="font-medium">{patientName}</span>
                             </div>
                             <div className="flex items-center space-x-2">
                               <Clock size={14} />
@@ -383,21 +398,21 @@ const TaskContent = ({ patients = [] }) => {
                       <div className="flex items-center space-x-2 mt-2 sm:mt-0 sm:ml-4">
                         <button
                           onClick={() => editTask(task)}
-                          className="p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          className="p-2 text-primary hover:text-secondary hover:bg-primary/10 rounded-lg transition-colors"
                           title="Edit task"
                         >
                           <Edit3 size={16} />
                         </button>
                         <button
                           onClick={() => deleteTask(task.id)}
-                          className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Delete task"
                         >
                           <Trash2 size={16} />
                         </button>
                         <button
                           onClick={() => toggleTaskStatus(task.id)}
-                          className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                          className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors bg-secondary/20 text-secondary hover:bg-secondary/30"
                         >
                           Mark as {task.status === 'completed' ? 'Pending' : task.status === 'pending' ? 'Completed' : 'Pending'}
                         </button>
@@ -410,11 +425,11 @@ const TaskContent = ({ patients = [] }) => {
 
             {filteredTasks.length === 0 && (
               <div className="p-8 sm:p-12 text-center text-gray-500">
-                <Calendar size={48} sm:size={64} className="mx-auto mb-2 sm:mb-4 text-gray-300" />
+                <Calendar size={48} className="mx-auto mb-2 sm:mb-4 text-gray-300" />
                 <p className="text-sm sm:text-lg">No tasks found for the selected filters</p>
                 <button
                   onClick={clearAllFilters}
-                  className="mt-2 sm:mt-3 text-indigo-600 hover:text-indigo-800 font-medium text-sm"
+                  className="mt-2 sm:mt-3 text-primary hover:text-secondary font-medium text-sm"
                 >
                   Clear filters to view all tasks
                 </button>
@@ -459,7 +474,7 @@ const TaskContent = ({ patients = [] }) => {
           <div key={index} className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 hover:shadow-md transition-shadow">
             <div className="flex items-center space-x-3 sm:space-x-4">
               <div className={`p-2 sm:p-3 rounded-full ${stat.color}`}>
-                <stat.icon size={20} sm:size={24} />
+                <stat.icon size={20} />
               </div>
               <div>
                 <p className={`text-2xl sm:text-3xl font-bold ${stat.textColor}`}>
@@ -481,17 +496,7 @@ const TaskContent = ({ patients = [] }) => {
                 {editingTask ? 'Edit Task' : 'Add New Task'}
               </h3>
               <button
-                onClick={() => {
-                  setShowAddModal(false);
-                  setEditingTask(null);
-                  setNewTask({
-                    patientId: patients.length > 0 ? patients[0].id : '',
-                    type: 'medication',
-                    title: '',
-                    time: '',
-                    notes: ''
-                  });
-                }}
+                onClick={handleCloseModal}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X size={20} />
@@ -508,7 +513,7 @@ const TaskContent = ({ patients = [] }) => {
                       ...prev, 
                       patientId: e.target.value
                     }))}
-                    className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                   >
                     {patients.map(patient => (
                       <option key={patient.id} value={patient.id}>{patient.name}</option>
@@ -522,7 +527,7 @@ const TaskContent = ({ patients = [] }) => {
                 <select
                   value={newTask.type}
                   onChange={(e) => setNewTask(prev => ({ ...prev, type: e.target.value }))}
-                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                   {Object.entries(taskTypes).map(([type, config]) => (
                     <option key={type} value={type}>{config.name}</option>
@@ -531,23 +536,23 @@ const TaskContent = ({ patients = [] }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Task Title</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Task Title *</label>
                 <input
                   type="text"
                   value={newTask.title}
                   onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                   placeholder="Enter task title..."
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Time *</label>
                 <input
                   type="time"
                   value={newTask.time}
                   onChange={(e) => setNewTask(prev => ({ ...prev, time: e.target.value }))}
-                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
 
@@ -556,7 +561,7 @@ const TaskContent = ({ patients = [] }) => {
                 <textarea
                   value={newTask.notes}
                   onChange={(e) => setNewTask(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                  className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary resize-none"
                   rows="3"
                   placeholder="Add any additional notes..."
                 />
@@ -565,25 +570,15 @@ const TaskContent = ({ patients = [] }) => {
 
             <div className="flex flex-col-reverse sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3 mt-4 sm:mt-6">
               <button
-                onClick={() => {
-                  setShowAddModal(false);
-                  setEditingTask(null);
-                  setNewTask({
-                    patientId: patients.length > 0 ? patients[0].id : '',
-                    type: 'medication',
-                    title: '',
-                    time: '',
-                    notes: ''
-                  });
-                }}
+                onClick={handleCloseModal}
                 className="w-full sm:w-auto px-6 py-2 sm:py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors font-medium text-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={saveTask}
-                disabled={!newTask.title || !newTask.time || !newTask.patientId}
-                className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white px-4 py-2 sm:px-4 sm:py-3 rounded-lg flex items-center justify-center space-x-2 transition-colors font-medium text-sm"
+                disabled={!newTask.title || !newTask.time}
+                className="w-full sm:w-auto bg-primary hover:bg-secondary disabled:bg-gray-300 text-white px-4 py-2 sm:px-4 sm:py-3 rounded-lg flex items-center justify-center space-x-2 transition-colors font-medium text-sm disabled:cursor-not-allowed"
               >
                 <Save size={16} />
                 <span>{editingTask ? 'Update Task' : 'Add Task'}</span>
