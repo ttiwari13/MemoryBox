@@ -12,13 +12,6 @@ const Header = ({ onGetStartedClick }) => {
         <h1 className="text-white text-lg sm:text-xl md:text-2xl font-semibold">
           Memory Box
         </h1>
-        <div className="flex items-center gap-4">
-          <button 
-            className="p-2 text-white border-2 border-transparent rounded-full hover:border-white hover:scale-110 transform transition-all duration-200"
-          >
-            <User className="size-4 sm:size-6 lg:size-8" />
-          </button>
-        </div>
       </header>
        
       {/* About Section */}
