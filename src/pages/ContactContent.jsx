@@ -176,27 +176,43 @@ const PhotoEntry = ({
           </button>
         </div>
 
-        {/* Correct Answer */}
-        <div className="absolute bottom-3 left-3 bg-white/90 px-3 py-1 rounded-full">
-          <span className="text-sm font-medium text-gray-700">Answer: {photo.correctAnswer}</span>
-        </div>
+        {/* Show answer only after feedback */}
+        {feedback && (
+          <div className="absolute bottom-3 left-3 bg-white/90 px-3 py-1 rounded-full">
+            <span className="text-sm font-medium text-gray-700">Answer: {photo.correctAnswer}</span>
+          </div>
+        )}
       </div>
 
       {/* Controls Section */}
       <div className="p-6 space-y-4">
+        {/* Question prompt */}
+        <div className="text-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">What do you see in this image?</h3>
+          <p className="text-sm text-gray-600">Click the microphone and speak your answer</p>
+        </div>
+
         {speechSupported && (
           <button
             onClick={onMicClick}
+            disabled={feedback}
             className={`w-full flex items-center justify-center space-x-3 p-4 rounded-lg font-medium text-lg transition-all duration-200 ${
-              isRecording
-                ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
-                : "bg-primary hover:bg-secondary text-white"
+              feedback 
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : isRecording
+                  ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
+                  : "bg-primary hover:bg-secondary text-white"
             }`}
           >
             {isRecording ? (
               <>
                 <Square size={24} />
                 <span>Stop Recording</span>
+              </>
+            ) : feedback ? (
+              <>
+                <Check size={24} />
+                <span>Answered</span>
               </>
             ) : (
               <>
@@ -382,16 +398,19 @@ const ContactContent = () => {
                      userInput.includes(correctAnswer) ||
                      correctAnswer.includes(userInput);
 
+    // Set feedback only for this specific photo
     setFeedback(prev => ({
       ...prev,
       [index]: isCorrect ? "correct" : "incorrect",
     }));
 
+    // Clear feedback after 4 seconds for this specific photo
     setTimeout(() => {
-      setFeedback(prev => ({
-        ...prev,
-        [index]: null,
-      }));
+      setFeedback(prev => {
+        const newFeedback = { ...prev };
+        delete newFeedback[index];
+        return newFeedback;
+      });
     }, 4000);
   };
 
