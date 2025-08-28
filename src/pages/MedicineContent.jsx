@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Check, 
@@ -43,7 +43,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 const ContentSection = ({ title, children, onAdd, onClearFilters }) => (
   <div className="bg-white rounded-xl shadow-lg p-6 transition-all duration-300 hover:shadow-xl">
     <div className="flex justify-between items-center mb-4 border-b pb-4">
-      <h3 className="text-2xl font-bold text-gray-900">{title}</h3>
+      <h3 className="text-xl sm:text-2xl font-bold text-gray-900">{title}</h3>
       <div className="flex items-center space-x-2">
         {onClearFilters && (
           <button 
@@ -298,7 +298,27 @@ const MedicationInventory = ({ inventory, onAdd, onEdit, onDelete }) => {
 // Component for the "Medication Calendar" section
 const MedicationCalendar = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [dates, setDates] = useState(Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate() }, (_, i) => ({ day: i + 1, status: '' })));
+  
+  // Use a state for dates, initialized from local storage
+  const [dates, setDates] = useState(() => {
+    try {
+      const storedDates = localStorage.getItem('medicationCalendar');
+      if (storedDates) {
+        return JSON.parse(storedDates);
+      }
+    } catch (error) {
+      console.error('Error loading calendar from storage:', error);
+    }
+    // Default calendar if no data found
+    const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, status: '' }));
+  });
+  
+  // Save to local storage whenever dates change
+  useEffect(() => {
+    localStorage.setItem('medicationCalendar', JSON.stringify(dates));
+  }, [dates]);
+
   const [draggedStatus, setDraggedStatus] = useState(null);
 
   const formattedMonth = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -322,9 +342,14 @@ const MedicationCalendar = () => {
     e.preventDefault();
   };
   
-  React.useEffect(() => {
-    setDates(Array.from({ length: new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate() }, (_, i) => ({ day: i + 1, status: '' })));
-  }, [currentMonth]);
+  // This effect will re-initialize the calendar when the month changes
+  // It checks if new dates need to be created or if the old ones can be reused
+  useEffect(() => {
+    const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+    if (dates.length !== daysInMonth) {
+      setDates(Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, status: '' })));
+    }
+  }, [currentMonth, dates.length]);
 
   return (
     <ContentSection title="Medication Calendar">
