@@ -158,9 +158,36 @@ const TherapistDashboard = ({ user }) => {
         setLoading(false);
         return;
     }
+    const setOnlineStatus = async () => {
+      await supabase
+        .from('user_presence')
+        .upsert({
+          user_id: user.id,
+          is_online: true,
+          last_seen: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+    };
+    const setOfflineStatus = async () => {
+      await supabase
+        .from('user_presence')
+        .update({
+          is_online: false,
+          last_seen: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+    };
+
+    setOnlineStatus();
+    const heartbeat = setInterval(() => {
+      setOnlineStatus();
+    }, 30000);
+
     fetchProfile(user.id);
     fetchAvailability(user.id);
     fetchRequests(user.id);
+    
     const availChannel = supabase
       .channel("avail_updates")
       .on(
@@ -185,24 +212,16 @@ const TherapistDashboard = ({ user }) => {
         }
       )
       .subscribe();
-    const presenceChannel = supabase.channel('online_therapists');
-    presenceChannel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await presenceChannel.track({ user_id: user.id, status: 'online', name: profile.name });
-      }
-    });
-    const cleanupPresence = async () => {
-      await presenceChannel.untrack();
-      supabase.removeChannel(presenceChannel);
-    };
     
     setLoading(false);
+    
     return () => {
+      clearInterval(heartbeat);
+      setOfflineStatus();
       supabase.removeChannel(availChannel);
       supabase.removeChannel(reqChannel);
-      cleanupPresence();
     };
-  }, [user, fetchProfile, fetchAvailability, fetchRequests, profile.name]);
+  }, [user, fetchProfile, fetchAvailability, fetchRequests]);
   const addAvailability = async (e) => {
     e.preventDefault();
     if (!newSlot.date || !newSlot.time) return notify("Please enter both date and time.", 'error');
