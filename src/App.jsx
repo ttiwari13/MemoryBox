@@ -1,27 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { supabase } from './supabaseClient';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { supabase } from './supabaseClient'; 
 import Home from './pages/Home';
 import LoginModal from './pages/LoginModal';
 import SignModal from './pages/SignModal';
 import Dashboard from './pages/Dashboard';
 import Footer from './components/Footer';
+import UpdatePasswordModal from './pages/UpdatePasswordModal';
+import Therapist from './pages/TherapistDashboard';
 
-// Protected Route Component
 const ProtectedRoute = ({ children, user }) => {
   if (!user) {
     return <Navigate to="/" replace />;
   }
   return children;
 };
-
-// Main App Content with all logic
-function AppContent() {
+function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
+  const [isUpdatePasswordModalOpen, setIsUpdatePasswordModalOpen] = useState(false);
   const navigate = useNavigate();
-
+  const handlePasswordUpdated = () => {
+    setIsUpdatePasswordModalOpen(false);
+    window.history.replaceState({}, document.title, "/"); 
+    setActiveModal('login');
+  };
+  
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -39,10 +44,29 @@ function AppContent() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event);
-        if (event === 'SIGNED_IN') {
-          setUser(session?.user ?? null);
+        
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsUpdatePasswordModalOpen(true);
           setActiveModal(null);
-         // navigate('/dashboard');
+          return; 
+        }
+        
+        if (event === 'SIGNED_IN') {
+          const user = session?.user ?? null;
+          setUser(user);
+          setActiveModal(null);
+          if (user) {
+            const userRole = user.user_metadata?.role;
+            console.log('User role:', userRole); 
+            
+            if (userRole === 'therapist') {
+              navigate('/therapist');
+            } else if (userRole === 'caregiver') {
+              navigate('/dashboard');
+            } else {
+              navigate('/dashboard');
+            }
+          }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setActiveModal(null);
@@ -70,12 +94,13 @@ function AppContent() {
       </div>
     );
   }
+  
+  const isAnyModalOpen = activeModal !== null || isUpdatePasswordModalOpen;
 
   return (
     <>
-      <div className={`${activeModal ? 'blur-sm' : ''} transition-all duration-300`}>
+      <div className={`${isAnyModalOpen ? 'blur-sm' : ''} transition-all duration-300`}>
         <Routes>
-          {/* Home Route */}
           <Route 
             path="/" 
             element={
@@ -85,8 +110,6 @@ function AppContent() {
               </>
             } 
           />
-          
-          {/* Dashboard Routes - Proper hierarchy with wildcard matching */}
           <Route 
             path="/dashboard/*" 
             element={
@@ -95,12 +118,17 @@ function AppContent() {
               </ProtectedRoute>
             } 
           />
-          
-          {/* Catch-all redirect to home */}
+          <Route 
+            path="/therapist" 
+            element={
+              <ProtectedRoute user={user}>
+                <Therapist user={user} />
+              </ProtectedRoute>
+            } 
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
-
       {activeModal === 'login' && (
         <LoginModal 
           onClose={closeModal}
@@ -114,16 +142,11 @@ function AppContent() {
           onSwitchToLogin={switchToLogin}
         />
       )}
-    </>
-  );
-}
 
-// Main App Wrapper for Router
-function App() {
-  return (
-   
-      <AppContent />
-   
+      {isUpdatePasswordModalOpen && (
+        <UpdatePasswordModal onPasswordUpdated={handlePasswordUpdated} />
+      )}
+    </>
   );
 }
 

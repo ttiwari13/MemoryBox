@@ -10,13 +10,23 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
   const [loading, setLoading] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [showResendOption, setShowResendOption] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isRecoverySent, setIsRecoverySent] = useState(false);
+const handleChange = (e, setter) => {
+    setter(e.target.value);
+    if (error) {
+      setError(null);
+      setShowResendOption(false);
+      setIsRecoverySent(false); 
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(null);
+    setIsRecoverySent(false);
     setLoading(true);
 
-    // Basic validation
     if (!email.trim() || !password.trim()) {
       setError("Please enter both email and password.");
       setLoading(false);
@@ -24,22 +34,17 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
     }
 
     try {
-      console.log("Attempting login with:", email.trim()); // Debug log
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password,
       });
 
-      console.log("Login response:", { data, error }); // Debug log
-
       if (error) {
-        console.error("Login error:", error); // Debug log
+        console.error("Login error:", error);
         
-        // Handle different types of authentication errors
         if (error.message.includes('Email not confirmed')) {
           setError("Please check your email and click the confirmation link before logging in. Check your spam folder if you don't see it.");
-          setShowResendOption(true); // Show option to resend email
+          setShowResendOption(true);
         } else if (error.message.includes('Invalid login credentials') || 
                    error.message.includes('invalid_credentials')) {
           setError("Invalid email or password. Please check your credentials and try again.");
@@ -50,15 +55,11 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
           setError(`Login failed: ${error.message}`);
         }
       } else if (data?.user) {
-        console.log("Login successful:", data.user);
-        
-        // Check if user session exists
         const { data: session } = await supabase.auth.getSession();
-        console.log("Current session:", session); // Debug log
         
         if (session?.session) {
           alert("Login successful! Welcome back!");
-          onClose(); // Close modal and you're logged in
+          onClose();
         } else {
           setError("Login succeeded but session creation failed. Please try again.");
         }
@@ -66,31 +67,43 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
         setError("Login failed. No user data received.");
       }
     } catch (error) {
-      console.error("Unexpected login error:", error); // Debug log
+      console.error("Unexpected login error:", error);
       setError("Something went wrong. Please check your internet connection and try again.");
     } finally {
       setLoading(false);
     }
   };
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setIsRecoverySent(false);
 
-  // Clear error when user starts typing
-  const handleEmailChange = (e) => {
-    setEmail(e.target.value);
-    if (error) {
-      setError(null);
-      setShowResendOption(false);
+    if (!email.trim()) {
+      setError("Please enter your email address to receive the password reset link.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/update-password`,
+      });
+
+      if (error) {
+        console.error("Password reset error:", error);
+        setError(`Failed to send password reset email: ${error.message}.`);
+      } else {
+        setError("Password reset link sent! Please check your email to continue.");
+        setIsRecoverySent(true); 
+        setShowResendOption(false);
+      }
+    } catch (error) {
+      console.error("Unexpected reset error:", error);
+      setError("An unexpected error occurred during password reset.");
+    } finally {
+      setLoading(false);
     }
   };
-
-  const handlePasswordChange = (e) => {
-    setPassword(e.target.value);
-    if (error) {
-      setError(null);
-      setShowResendOption(false);
-    }
-  };
-
-  // Resend confirmation email
   const handleResendConfirmation = async () => {
     if (!email.trim()) {
       setError("Please enter your email address first.");
@@ -119,23 +132,17 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black bg-opacity-50"
         onClick={onClose}
       ></div>
-      
-      {/* Modal */}
       <div className="relative z-10 w-full max-w-md mx-4 bg-white rounded-xl shadow-2xl">
-        {/* Close Button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 transition-colors z-20"
         >
           <X className="w-5 h-5" />
         </button>
-
-        {/* Modal Content */}
         <div className="p-8">
           <h1 className="text-3xl font-bold text-gray-800 text-center mb-2">
             Welcome Back!
@@ -145,10 +152,9 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
           </p>
 
           <form onSubmit={handleLogin} className="space-y-6">
-            {/* Error Message */}
             {error && (
               <div className={`px-4 py-3 rounded-lg ${
-                error.includes('Confirmation email sent') 
+                error.includes('Confirmation email sent') || error.includes('reset link sent')
                   ? 'bg-green-50 border border-green-200 text-green-700'
                   : 'bg-red-50 border border-red-200 text-red-700'
               }`}>
@@ -167,30 +173,26 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
                 )}
               </div>
             )}
-
-            {/* Email Input */}
             <div className="relative">
               <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="email"
                 placeholder="Email Address"
                 value={email}
-                onChange={handleEmailChange}
+                onChange={(e) => handleChange(e, setEmail)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                 required
                 disabled={loading}
                 autoComplete="email"
               />
             </div>
-
-            {/* Password Input */}
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="Password"
                 value={password}
-                onChange={handlePasswordChange}
+                onChange={(e) => handleChange(e, setPassword)}
                 className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                 required
                 disabled={loading}
@@ -205,21 +207,28 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            
-            {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <input type="checkbox" id="remember" className="w-4 h-4 text-blue-600 rounded" />
+                <input 
+                  type="checkbox" 
+                  id="remember" 
+                  checked={rememberMe} 
+                  onChange={(e) => setRememberMe(e.target.checked)} 
+                  className="w-4 h-4 text-blue-600 rounded" 
+                />
                 <label htmlFor="remember" className="ml-2 block text-sm text-gray-900">
                   Remember me
                 </label>
               </div>
-              <a href="#" className="font-medium text-sm text-blue-600 hover:text-blue-500">
-                Forgot password?
-              </a>
+              <button 
+                type="button" 
+                onClick={handlePasswordReset} 
+                disabled={loading || isRecoverySent}
+                className="font-medium text-sm text-blue-600 hover:text-blue-500 disabled:opacity-50"
+              >
+                {isRecoverySent ? 'Link Sent!' : 'Forgot password?'}
+              </button>
             </div>
-
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading || !email.trim() || !password.trim()}
@@ -233,15 +242,10 @@ const LoginModal = ({ onClose, onSwitchToSignup }) => {
               {!loading && <ArrowRight className="w-5 h-5" />}
             </button>
           </form>
-
-          {/* Sign up link */}
           <div className="mt-8 text-center text-sm text-gray-500">
             Don't have an account? 
             <button
-              onClick={() => {
-                console.log('Switch to signup clicked'); // Debug log
-                onSwitchToSignup();
-              }}
+              onClick={onSwitchToSignup}
               className="font-medium text-blue-600 hover:text-blue-500 ml-1"
               disabled={loading}
             >
