@@ -6,7 +6,6 @@ const TherapistDashboard = ({ user }) => {
     name: "",
     degree: "",
     rate: 0,
-    photo_url: PHOTO_PLACEHOLDER,
     phone: "",
     specialization: "",
     email: "", 
