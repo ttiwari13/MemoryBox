@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // useNavigate hook ko import kiya
+import { useNavigate } from 'react-router-dom'; 
 import { UserCircle, Mail, Phone, MapPin, Calendar, Edit3, Save, X, Camera, LogOut } from 'lucide-react';
-import { supabase } from '../supabaseClient'; // Supabase client ko import kiya
+import { supabase } from '../supabaseClient'; 
 
 const Profile = ({ user }) => {
   const navigate = useNavigate(); 
@@ -66,20 +66,26 @@ const Profile = ({ user }) => {
     console.log("Edit cancelled.");
   };
 
-  const handleSignOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("Sign out error:", error);
-      } else {
-        console.log("Signed out successfully.");
-       
-        navigate('/');
-      }
-    } catch (error) {
-      console.error("An unexpected error occurred during sign out:", error);
-    }
-  };
+ const handleSignOut = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession(); 
+      if (session) {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          console.error("Sign out failed on server (403/Other error):", error);
+        } else {
+          console.log("Signed out successfully.");
+        }
+      } else {
+        console.warn("Sign out attempted, but user was already logged out. Proceeding with redirect.");
+      }
+      navigate('/');
+
+    } catch (error) {
+      console.error("An unexpected error occurred during sign out:", error);
+      navigate('/');
+    }
+  };
 
   const ProfileField = ({ icon, label, value, isEditing, onInputChange, inputType = 'text', readOnly = false }) => (
     <div>

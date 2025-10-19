@@ -1,42 +1,80 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
-import { Clock, DollarSign, MessageSquare, Circle, UserCheck, RefreshCw, XCircle, CheckCircle, Info, X } from 'lucide-react';
+import { Clock, DollarSign, MessageSquare, Circle, UserCheck, RefreshCw, XCircle, CheckCircle, Info, X, Calendar } from 'lucide-react';
 
 const TherapistCard = ({ therapist, schedules, onlineStatus, onSendChangeRequest }) => {
-  const isOnline = onlineStatus[therapist.id] || false;
-  const therapistSchedules = schedules.filter(s => s.therapist_id === therapist.id);
-  const nextAvailableSlot = therapistSchedules
-    .sort((a, b) => new Date(a.time_slot).getTime() - new Date(b.time_slot).getTime())
-    .find(s => !s.is_booked && new Date(s.time_slot) > new Date()); 
+  const isOnline = onlineStatus[therapist.id] || false; 
   
-  const formattedTime = nextAvailableSlot 
-    ? new Date(nextAvailableSlot.time_slot).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    : 'N/A (Fully Booked)';
+  const therapistSchedules = schedules
+    .filter(s => s.therapist_id === therapist.id && !s.is_booked)
+    .map(s => ({ 
+      ...s, 
+      dateTime: new Date(`${s.date}T${s.time}`)
+    }))
+    .filter(s => s.dateTime > new Date()) 
+    .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 
   const statusColor = isOnline ? 'text-green-600 bg-green-100' : 'text-gray-500 bg-gray-100';
+
+  const formatSlotTime = (date, time) => {
+    const dt = new Date(`${date}T${time}`);
+    const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const timeStr = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return { dateStr, timeStr };
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col transition-all hover:shadow-xl border border-gray-100">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold text-gray-800">{therapist.name}</h3>
+        <h3 className="text-xl font-bold text-gray-800">{therapist.name || 'Therapist'}</h3>
         <div className={`flex items-center text-sm font-medium px-3 py-1 rounded-full ${statusColor}`}>
           {isOnline ? <Circle className="w-2.5 h-2.5 fill-current mr-1 animate-pulse" /> : <Circle className="w-2.5 h-2.5 fill-current mr-1" />}
           {isOnline ? 'Online' : 'Offline'}
         </div>
       </div>
       
-      <p className="text-sm text-gray-500 mb-4">{therapist.degree}</p>
+      <p className="text-sm text-gray-500 mb-4">{therapist.degree || 'Professional Therapist'}</p>
 
-      <div className="space-y-3 mb-6">
+      <div className="space-y-3 mb-4">
         <div className="flex items-center text-gray-700">
           <DollarSign className="w-5 h-5 text-indigo-500 mr-2" />
           <span className="font-semibold text-lg">${(therapist.rate || 0).toFixed(2)}</span> / hr
         </div>
-        <div className="flex items-center text-gray-700">
-          <Clock className="w-5 h-5 text-teal-500 mr-2" />
-          Next Slot: 
-          <span className="ml-2 font-medium">{formattedTime}</span>
-        </div>
+      </div>
+      <div className="mb-6 border-t pt-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+          <Calendar className="w-4 h-4 mr-2 text-purple-600" />
+          Available Slots ({therapistSchedules.length})
+        </h4>
+        
+        {therapistSchedules.length === 0 ? (
+          <p className="text-sm text-red-500 italic">No slots available</p>
+        ) : (
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {therapistSchedules.slice(0, 5).map((slot) => {
+              const { dateStr, timeStr } = formatSlotTime(slot.date, slot.time);
+              return (
+                <div key={slot.id} className="flex items-center justify-between bg-purple-50 px-3 py-2 rounded-lg text-sm">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-purple-600" />
+                    <span className="font-medium text-gray-700">{dateStr}</span>
+                  </div>
+                  <span className="text-purple-700 font-semibold">{timeStr}</span>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    slot.mode === 'online' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {slot.mode}
+                  </span>
+                </div>
+              );
+            })}
+            {therapistSchedules.length > 5 && (
+              <p className="text-xs text-gray-500 italic text-center pt-1">
+                +{therapistSchedules.length - 5} more slots
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <button
@@ -49,7 +87,6 @@ const TherapistCard = ({ therapist, schedules, onlineStatus, onSendChangeRequest
     </div>
   );
 };
-
 const PatientTherapistBoard = () => {
   const [therapists, setTherapists] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -66,75 +103,118 @@ const PatientTherapistBoard = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const fetchTherapists = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, name, degree, rate, email');
-
-    if (error) {
-      console.error('Error fetching therapists:', error);
-    } else {
-      setTherapists(data || []);
-    }
-  }, []);
-
-  const fetchSchedules = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('therapist_availability')
-      .select('id, therapist_id, date, time, is_booked, booked_by_patient_id');
-
-    if (error) {
-      console.error('Error fetching schedules:', error);
-    } else {
-      setSchedules((data || []).map(s => ({
-        ...s,
-        time_slot: `${s.date}T${s.time}:00`,
-        is_booked: s.is_booked || false,
-        booked_by_patient_id: s.booked_by_patient_id || null,
-      })));
-    }
-  }, []);
-
-  const fetchOnlineStatus = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('user_presence')
-      .select('user_id, is_online');
+  const fetchTherapists = async () => {
+    console.log(' Fetching all therapists from profiles...');
     
-    if (error) {
-      console.error('Error fetching online status:', error);
-      return;
+    try {
+      const { data: allProfiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, name, email, degree, rate, photo_url, specialization, phone');
+
+      console.log(' All profiles:', allProfiles);
+      console.log(' Profile error:', profileError);
+
+      if (profileError) {
+        console.error(' Error fetching profiles:', profileError);
+        throw profileError;
+      }
+      console.log('Total therapists found:', allProfiles?.length || 0);
+      setTherapists(allProfiles || []);
+      
+    } catch (error) {
+      console.error('Error fetching therapists:', error.message || error);
+      console.error('Full error object:', error);
+      setTherapists([]);
     }
+  };
 
-    const statusMap = {};
-    data?.forEach(item => {
-      statusMap[item.user_id] = item.is_online;
-    });
-    setOnlineStatus(statusMap);
-  }, []);
+  const fetchSchedules = async () => {
+    console.log('Fetching schedules...');
+    try {
+      const { data, error } = await supabase
+        .from('therapist_availability')
+        .select('*'); 
 
-  const fetchTherapistNotifications = useCallback(async (patientId) => {
+      console.log('Raw schedule response:', { data, error });
+      console.log('Total rows fetched:', data?.length || 0);
+
+      if (error) {
+        console.error('Error in fetchSchedules:', error);
+        throw error;
+      }
+      
+      if (data && data.length > 0) {
+        console.log('First slot sample:', data[0]);
+      }
+      
+      setSchedules(data || []);
+    } catch (error) {
+      console.error('Error fetching schedules:', error);
+      setSchedules([]);
+    }
+  };
+
+  const fetchOnlineStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_presence')
+        .select('user_id, is_online');
+      
+      if (error) throw error;
+
+      const statusMap = {};
+      data?.forEach(item => {
+        statusMap[item.user_id] = item.is_online;
+      });
+      setOnlineStatus(statusMap);
+    } catch (error) {
+      console.error('Error fetching online status:', error);
+      setOnlineStatus({});
+    }
+  };
+
+  const fetchTherapistNotifications = async (patientId) => {
     if (!patientId) return;
+    
     try {
       const { data, error } = await supabase
         .from('change_requests')
-        .select(`
-          id, message, created_at, status, 
-          therapist_id, 
-          therapists:therapist_id(name)
-        `)
+        .select('id, message, created_at, status, therapist_id')
         .eq('patient_id', patientId)
         .eq('status', 'therapist_initiated') 
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTherapistNotifications(data || []);
+      
+      if (data && data.length > 0) {
+        const therapistIds = [...new Set(data.map(r => r.therapist_id))];
+        const { data: therapistData } = await supabase
+          .from('profiles')
+          .select('id, name')
+          .in('id', therapistIds);
+        
+        const therapistMap = {};
+        therapistData?.forEach(t => {
+          therapistMap[t.id] = t.name;
+        });
+        
+        const enrichedData = data.map(notification => ({
+          ...notification,
+          profiles: { name: therapistMap[notification.therapist_id] || 'Unknown' }
+        }));
+        
+        setTherapistNotifications(enrichedData);
+      } else {
+        setTherapistNotifications([]);
+      }
     } catch (error) {
-      console.error("Error fetching therapist notifications:", error);
+      console.error("Error fetching notifications:", error);
+      setTherapistNotifications([]);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    const setupInitialData = async () => {
+    const loadData = async () => {
       setLoading(true);
       
       const authUser = await supabase.auth.getUser();
@@ -142,8 +222,8 @@ const PatientTherapistBoard = () => {
       
       if (currentUserId) {
         setUserId(currentUserId);
-        await fetchTherapists();
-        await fetchSchedules();
+        await fetchSchedules(); 
+        await fetchTherapists(); 
         await fetchOnlineStatus();
         await fetchTherapistNotifications(currentUserId);
       }
@@ -151,64 +231,28 @@ const PatientTherapistBoard = () => {
       setLoading(false);
     };
 
-    setupInitialData();
-  }, [fetchTherapists, fetchSchedules, fetchOnlineStatus, fetchTherapistNotifications]);
-
-  useEffect(() => {
-    if (!userId) return;
-
-    // Subscribe to schedule changes
-    const scheduleChannel = supabase
-      .channel('patient-view-updates')
+    loadData();
+    const availChannel = supabase
+      .channel('availability_changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'therapist_availability' },
-        () => fetchSchedules()
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'change_requests', filter: `patient_id=eq.${userId}` },
-        (payload) => {
-          if (payload.new?.status === 'therapist_initiated') {
-            fetchTherapistNotifications(userId);
-            notify("New message from your therapist!", 'info');
-          }
-        }
-      )
-      .subscribe();
-
-    // Subscribe to real-time presence changes
-    const presenceChannel = supabase
-      .channel('presence-status-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'user_presence'
-        },
-        (payload) => {
-          console.log('Presence changed:', payload);
-          if (payload.new) {
-            setOnlineStatus(prev => ({
-              ...prev,
-              [payload.new.user_id]: payload.new.is_online
-            }));
-          }
+        () => {
+          fetchSchedules();
+          fetchTherapists();
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(scheduleChannel);
-      supabase.removeChannel(presenceChannel);
+      supabase.removeChannel(availChannel);
     };
-  }, [userId, fetchSchedules, fetchTherapistNotifications]);
+  }, []);
 
   const openMessageModal = (therapistId) => {
-    if (!userId) {
-      console.error("Authentication Error: User must be signed in to send a message.");
-      return;
+    if (!userId) { 
+      notify("Please sign in to send a message.", 'error');
+      return; 
     }
     setMessageModal({ isOpen: true, therapistId: therapistId, status: null });
   };
@@ -224,13 +268,11 @@ const PatientTherapistBoard = () => {
 
     setMessageModal(prev => ({ ...prev, status: 'sending' }));
 
-    const { error } = await supabase
-      .from('change_requests')
-      .insert([
+    const { error } = await supabase.from('change_requests').insert([
         { 
           therapist_id: messageModal.therapistId, 
           patient_id: userId, 
-          message: currentMessage.trim(),
+          message: currentMessage.trim(), 
           status: 'pending' 
         },
       ]);
@@ -256,16 +298,16 @@ const PatientTherapistBoard = () => {
       notify(action === 'confirm' ? "Change acknowledged." : "Notification ignored.", 'success');
       fetchTherapistNotifications(userId); 
     } catch (error) {
-      console.error("Error processing notification action:", error);
-      notify("Failed to update notification status.", 'error');
+      console.error("Error processing notification:", error);
+      notify("Failed to update notification.", 'error');
     }
   };
-
+  
   if (loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center bg-gray-50 p-8 rounded-xl shadow-inner">
         <RefreshCw className="w-8 h-8 text-purple-600 animate-spin mr-3" />
-        <p className="text-gray-600 font-medium">Loading Therapists and Realtime Status...</p>
+        <p className="text-gray-600 font-medium">Loading Therapists...</p>
       </div>
     );
   }
@@ -284,7 +326,7 @@ const PatientTherapistBoard = () => {
       <h1 className="text-4xl font-extrabold text-gray-900 mb-2 flex items-center gap-3">
         <UserCheck className="w-8 h-8 text-purple-600" /> Therapist Directory
       </h1>
-      <p className="text-lg text-gray-600 mb-8">View availability and real-time status of professional therapists.</p>
+      <p className="text-lg text-gray-600 mb-8">View availability and status of professional therapists.</p>
       
       {notification && (
         <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-2xl z-50 text-white ${notification.type === 'success' ? 'bg-green-500' : notification.type === 'info' ? 'bg-blue-500' : 'bg-red-500'}`}>
@@ -300,7 +342,7 @@ const PatientTherapistBoard = () => {
           {therapistNotifications.map(notification => (
             <div key={notification.id} className="bg-white p-4 rounded-lg mb-3 border border-gray-200">
               <p className="text-sm text-gray-700 font-semibold mb-2">
-                Message from Dr. {notification.therapists?.name || 'Therapist'}:
+                Message from Dr. {notification.profiles?.name || 'Therapist'}:
               </p>
               <p className="text-gray-600 mb-3 ml-1 border-l-2 pl-3 italic">{notification.message.replace('THERAPIST MESSAGE: ', '')}</p>
               <div className="flex space-x-3 justify-end">
@@ -337,7 +379,8 @@ const PatientTherapistBoard = () => {
       {therapists.length === 0 && !loading && (
         <div className="text-center py-12 bg-white rounded-xl shadow-lg mt-6">
           <XCircle className="w-10 h-10 text-red-400 mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">No therapists found in the directory.</p>
+          <p className="text-gray-600 font-medium">No therapists with available slots found.</p>
+          <p className="text-gray-500 text-sm mt-2">Therapists need to add their availability first.</p>
         </div>
       )}
 
@@ -358,7 +401,7 @@ const PatientTherapistBoard = () => {
                 <div className="text-center">
                   <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-4" />
                   <h2 className="text-xl font-bold text-gray-800">Request Sent!</h2>
-                  <p className="text-gray-500 mt-2">The therapist has been notified in real-time.</p>
+                  <p className="text-gray-500 mt-2">The therapist has been notified.</p>
                 </div>
               ) : messageModal.status === 'error' ? (
                 <div className="text-center">
@@ -373,10 +416,10 @@ const PatientTherapistBoard = () => {
                     Message {therapists.find(t => t.id === messageModal.therapistId)?.name || 'Therapist'}
                   </h2>
                   <p className="text-gray-600 mb-6">
-                    Send a brief, real-time message about your desire to change your schedule.
+                    Send a message about your schedule change request.
                   </p>
                   
-                  <form onSubmit={handleSubmitMessage} className="space-y-4">
+                  <div className="space-y-4">
                     <textarea
                       value={currentMessage}
                       onChange={(e) => setCurrentMessage(e.target.value)}
@@ -386,7 +429,7 @@ const PatientTherapistBoard = () => {
                       required
                     ></textarea>
                     <button
-                      type="submit"
+                      onClick={handleSubmitMessage}
                       disabled={!currentMessage.trim() || messageModal.status === 'sending'}
                       className={`w-full py-3 rounded-lg font-semibold text-white transition-colors flex items-center justify-center ${
                         messageModal.status === 'sending' ? 'bg-gray-400' : 'bg-purple-600 hover:bg-purple-700'
@@ -400,7 +443,7 @@ const PatientTherapistBoard = () => {
                         'Send Request'
                       )}
                     </button>
-                  </form>
+                  </div>
                 </>
               )}
             </div>

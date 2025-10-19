@@ -90,24 +90,90 @@ const SignupModal = ({ onClose, onSwitchToLogin }) => {
             submit:
               "This email is already registered. Try logging in instead.",
           });
-        } else setErrors({ submit: error.message });
-      } else {
-        console.log("Signed up successfully:", data.user);
-
-        if (data.user && !data.user.email_confirmed_at) {
-          setErrors({
-            submit:
-              "Success! Please check your email to confirm your account. Redirecting to login...",
-          });
         } else {
-          setErrors({
-            submit: "Account created successfully! Redirecting to login...",
-          });
+          setErrors({ submit: error.message });
         }
+        setLoading(false);
+        return;
+      }
 
-        setTimeout(() => {
-          onSwitchToLogin();
-        }, 2000);
+      console.log("Signed up successfully:", data.user);
+      if (data.user) {
+        try {
+          if (formData.role === "caregiver") {
+            console.log("Creating caregiver profile for user:", data.user.id);
+            const { data: caregiverData, error: caregiverError } = await supabase
+              .from("caregivers")
+              .insert({
+                id: data.user.id,
+                name: formData.fullName,
+                email: formData.email,
+                phone: "",
+                address: "",
+                profile_photo_url: null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+
+            console.log(" Caregiver insert response:", caregiverData);
+            console.log("Caregiver insert error:", caregiverError);
+
+            if (caregiverError) {
+              console.error("Error creating caregiver profile:", caregiverError);
+              setErrors({
+                submit: "Account created but profile setup failed: " + caregiverError.message,
+              });
+            } else {
+              console.log("Caregiver profile created successfully!");
+            }
+          } else if (formData.role === "therapist") {
+            console.log("Creating therapist profile for user:", data.user.id);
+            const { data: profileData, error: profileError } = await supabase
+              .from("profiles")
+              .insert({
+                id: data.user.id,
+                name: formData.fullName,
+                email: formData.email,
+                phone: "",
+                degree: "",
+                rate: 0,
+                photo_url: null,
+                specialization: "",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+
+            console.log(" Therapist insert response:", profileData);
+            console.log("Therapist insert error:", profileError);
+
+            if (profileError) {
+              console.error("Error creating therapist profile:", profileError);
+              setErrors({
+                submit: "Account created but profile setup failed: " + profileError.message,
+              });
+            } else {
+              console.log("Therapist profile created successfully!");
+            }
+          }
+        } catch (profileCreationError) {
+          console.error("Profile creation error:", profileCreationError);
+        }
+        if (!errors.submit) {
+          if (data.user.email_confirmed_at) {
+            setErrors({
+              submit: "Account created successfully! Redirecting to login...",
+            });
+          } else {
+            setErrors({
+              submit:
+                "Success! Please check your email to confirm your account. Redirecting to login...",
+            });
+          }
+
+          setTimeout(() => {
+            onSwitchToLogin();
+          }, 2000);
+        }
       }
     } catch (error) {
       console.error("Signup error:", error);

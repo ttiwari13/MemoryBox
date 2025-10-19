@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from '../supabaseClient'; 
 import { Calendar, DollarSign, UserCheck, Trash2, CheckCircle, XCircle, RefreshCw, MessageSquare, Info, User, Edit3, Save, X, LogOut, Clock, Send } from 'lucide-react';
-
-const PHOTO_PLACEHOLDER = "https://placehold.co/100x100/4F46E5/ffffff?text=DR"; 
-
 const TherapistDashboard = ({ user }) => {
   const [profile, setProfile] = useState({
     name: "",
@@ -26,12 +23,15 @@ const TherapistDashboard = ({ user }) => {
   const [therapistMessage, setTherapistMessage] = useState("");
   const [editingSlotId, setEditingSlotId] = useState(null);
   const [editedSlot, setEditedSlot] = useState(null);
+  
   const notify = (message, type = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
+  
   const formatTime = (time) => time ? new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  
   const fetchProfile = useCallback(async (therapistId) => {
     try {
       const { data, error } = await supabase
@@ -109,6 +109,7 @@ const TherapistDashboard = ({ user }) => {
       notify("Failed to load patient requests. (DB Check: change_requests table)", 'error');
     }
   }, []);
+  
   const openEditProfileModal = () => {
     setEditedProfile({ ...profile });
     setEditProfileModal({ isOpen: true, saving: false });
@@ -153,11 +154,13 @@ const TherapistDashboard = ({ user }) => {
       notify("Sign out failed.", 'error');
     }
   };
+  
   useEffect(() => {
     if (!user) {
         setLoading(false);
         return;
     }
+    
     const setOnlineStatus = async () => {
       await supabase
         .from('user_presence')
@@ -166,8 +169,9 @@ const TherapistDashboard = ({ user }) => {
           is_online: true,
           last_seen: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'user_id' }); 
     };
+    
     const setOfflineStatus = async () => {
       await supabase
         .from('user_presence')
@@ -187,7 +191,6 @@ const TherapistDashboard = ({ user }) => {
     fetchProfile(user.id);
     fetchAvailability(user.id);
     fetchRequests(user.id);
-    
     const availChannel = supabase
       .channel("avail_updates")
       .on(
@@ -203,12 +206,12 @@ const TherapistDashboard = ({ user }) => {
         "postgres_changes",
         { event: "*", schema: "public", table: "change_requests", filter: `therapist_id=eq.${user.id}` },
         (payload) => {
-            if (payload.eventType !== 'DELETE') {
-                fetchRequests(user.id);
-                if (payload.eventType === 'INSERT' && payload.new?.status === 'pending') {
-                    notify("New schedule change request received!", 'info');
-                }
-            }
+          if (payload.eventType !== 'DELETE') {
+              fetchRequests(user.id);
+              if (payload.eventType === 'INSERT' && payload.new?.status === 'pending') {
+                  notify("New schedule change request received!", 'info');
+              }
+          }
         }
       )
       .subscribe();
@@ -222,9 +225,17 @@ const TherapistDashboard = ({ user }) => {
       supabase.removeChannel(reqChannel);
     };
   }, [user, fetchProfile, fetchAvailability, fetchRequests]);
-  const addAvailability = async (e) => {
+  
+ const addAvailability = async (e) => {
     e.preventDefault();
     if (!newSlot.date || !newSlot.time) return notify("Please enter both date and time.", 'error');
+    const selectedDate = new Date(newSlot.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (selectedDate < today) {
+      return notify("Cannot add slots for past dates.", 'error');
+    }
 
     try {
       const { error } = await supabase.from("therapist_availability").insert([
@@ -239,6 +250,7 @@ const TherapistDashboard = ({ user }) => {
       if (error) throw error;
       setNewSlot({ date: "", time: "", mode: "online" });
       notify("Slot added successfully!");
+      fetchAvailability(user.id); 
     } catch (err) {
       console.error("Error adding slot:", err.message);
       notify("Failed to add slot. (DB Check: is_booked column)", 'error');
@@ -254,11 +266,13 @@ const TherapistDashboard = ({ user }) => {
         .eq("id", id);
       if (error) throw error;
       notify("Slot deleted!");
+      fetchAvailability(user.id);
     } catch (err) {
       console.error("Error deleting slot:", err.message);
       notify("Failed to delete slot.", 'error');
     }
   };
+  
   const handleEditStart = (slot) => {
     setEditingSlotId(slot.id);
     setEditedSlot({ ...slot });
@@ -296,16 +310,47 @@ const TherapistDashboard = ({ user }) => {
     setEditingSlotId(null);
     setEditedSlot(null);
   };
+  
   const fetchPatientDetails = async (patientId) => {
       setRequestModal(prev => ({ ...prev, loadingDetails: true }));
       try {
+          console.log("🔍 Fetching caregiver details for ID:", patientId);
           const { data, error } = await supabase
-              .from('profiles')
+              .from('caregivers')
               .select('id, email, name, phone')
               .eq('id', patientId)
-              .single();
+              .maybeSingle();
+          
+          console.log("Response data:", data);
+          console.log("Response error:", error);
               
-          if (error) throw error;
+          if (error) {
+              console.error("Supabase error details:", {
+                  message: error.message,
+                  details: error.details,
+                  hint: error.hint,
+                  code: error.code
+              });
+              throw error;
+          }
+        
+          if (!data) {
+              console.warn("No caregiver profile found in database");
+              
+              setRequestModal(prev => ({ 
+                  ...prev, 
+                  patientDetails: {
+                      name: "Caregiver profile not found",
+                      email: "Not available",
+                      phone: "Not available",
+                      id: patientId
+                  },
+                  loadingDetails: false 
+              }));
+              return;
+          }
+          
+          console.log("Successfully fetched caregiver data:", data);
           
           setRequestModal(prev => ({ 
               ...prev, 
@@ -313,13 +358,17 @@ const TherapistDashboard = ({ user }) => {
               loadingDetails: false 
           }));
       } catch (error) {
-          console.error("Error fetching patient details:", error);
+          console.error("Error fetching caregiver details:", error);
           setRequestModal(prev => ({ 
               ...prev, 
-              patientDetails: { name: "Unable to fetch", email: "", phone: "" },
+              patientDetails: { 
+                  name: "Unable to fetch", 
+                  email: error.message || "Check console", 
+                  phone: "N/A" 
+              },
               loadingDetails: false 
           }));
-          notify("Failed to fetch patient details.", 'error');
+          notify("Failed to fetch caregiver details: " + (error.message || "Unknown error"), 'error');
       }
   };
 
@@ -349,6 +398,7 @@ const TherapistDashboard = ({ user }) => {
           notify(`Failed to ${newStatus} request.`, 'error');
       }
   };
+  
   const openTherapistMessageModal = (patientId) => {
     setTherapistMessage("");
     setTherapistMessageModal({ isOpen: true, patientId: patientId, saving: false });
@@ -383,9 +433,11 @@ const TherapistDashboard = ({ user }) => {
         setTherapistMessageModal(prev => ({ ...prev, saving: false }));
     }
   };
+  
   const getPatientIdForSlot = (slot) => {
     return slot.booked_by_patient_id || null;
   };
+  
   if (!user) {
     return (
       <div className="flex justify-center items-center min-h-[50vh] bg-red-50 p-6">
@@ -409,20 +461,20 @@ const TherapistDashboard = ({ user }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             <div className="lg:col-span-2 bg-white shadow-xl rounded-2xl p-6 flex flex-col sm:flex-row items-center sm:items-start gap-4 border border-purple-200 relative">
                 <div className="absolute top-4 right-4 flex space-x-2">
-                  <button
-                    onClick={openEditProfileModal}
-                    className="p-2 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-lg transition"
-                    title="Edit Profile"
-                  >
-                    <Edit3 className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={handleSignOut}
-                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
-                    title="Sign Out"
-                  >
-                    <LogOut className="w-5 h-5" />
-                  </button>
+                    <button
+                      onClick={openEditProfileModal}
+                      className="p-2 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-lg transition"
+                      title="Edit Profile"
+                    >
+                      <Edit3 className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={handleSignOut}
+                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
+                      title="Sign Out"
+                    >
+                      <LogOut className="w-5 h-5" />
+                    </button>
                 </div>
                 
                 <img src={profile.photo_url} alt={profile.name} className="w-24 h-24 rounded-full object-cover shadow-lg" 
@@ -431,20 +483,20 @@ const TherapistDashboard = ({ user }) => {
                     <h2 className="text-2xl font-bold text-gray-900">{profile.name}</h2>
                     <p className="text-purple-600 font-medium mb-1">{profile.degree}</p>
                     {profile.specialization && (
-                      <p className="text-sm text-gray-600 mb-2">🎯 {profile.specialization}</p>
+                      <p className="text-sm text-gray-600 mb-2"> {profile.specialization}</p>
                     )}
                     <div className="flex items-center justify-center sm:justify-start text-lg text-gray-700 mb-2">
                         <DollarSign className="w-5 h-5 mr-1 text-green-600" /> 
                         <span className="font-semibold">{profile.rate.toFixed(2)}</span> / hr
                     </div>
                     {profile.phone && (
-                      <p className="text-sm text-gray-600">📞 {profile.phone}</p>
+                      <p className="text-sm text-gray-600">{profile.phone}</p>
                     )}
                     <p className="text-sm text-gray-600">✉️ {profile.email}</p>
                 </div>
             </div>
             <div className="bg-purple-600 text-white shadow-xl rounded-2xl p-6 flex items-center justify-between transition-transform hover:scale-[1.02] cursor-pointer"
-                  onClick={requests.length > 0 ? () => openRequestModal(requests[0]) : null}>
+                onClick={requests.length > 0 ? () => openRequestModal(requests[0]) : null}>
                 <div className="flex items-center gap-4">
                     <MessageSquare className="w-8 h-8" />
                     <div>
@@ -571,8 +623,8 @@ const TherapistDashboard = ({ user }) => {
                         <td className="px-4 py-3 text-center text-sm">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full font-semibold ${
                                 isBooked 
-                                    ? 'bg-red-100 text-red-800' 
-                                    : 'bg-green-100 text-green-800'
+                                        ? 'bg-red-100 text-red-800' 
+                                        : 'bg-green-100 text-green-800'
                             }`}>
                                 {isBooked ? 'Booked' : 'Available'}
                             </span>
@@ -729,19 +781,6 @@ const TherapistDashboard = ({ user }) => {
                 />
                 <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Profile Photo URL</label>
-                <input
-                  type="url"
-                  value={editedProfile.photo_url || ""}
-                  onChange={(e) => setEditedProfile({ ...editedProfile, photo_url: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-purple-500 focus:border-purple-500"
-                  placeholder="https://example.com/photo.jpg"
-                  disabled={editProfileModal.saving}
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter a URL to your profile photo</p>
-              </div>
             </div>
             
             <div className="mt-6 flex justify-end space-x-3 border-t pt-4">
@@ -772,7 +811,6 @@ const TherapistDashboard = ({ user }) => {
         </div>
       )}
       
-      {/* --- Patient Request Modal --- */}
       {requestModal.isOpen && requestModal.data && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black bg-opacity-60" onClick={() => setRequestModal({ isOpen: false, data: null, patientDetails: null })}></div>
@@ -788,37 +826,37 @@ const TherapistDashboard = ({ user }) => {
             <h3 className="text-2xl font-bold text-purple-700 mb-6 border-b pb-2">Patient Schedule Change Request</h3>
             
             <div className="space-y-4">
-                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                    <div className="flex items-center text-yellow-800 font-semibold mb-2">
-                        <Info className="w-5 h-5 mr-2" /> Requested Change:
-                    </div>
-                    <p className="text-gray-700">{requestModal.data.message}</p>
-                    {requestModal.data.requested_time && (
-                        <p className="mt-2 text-sm text-gray-600">
-                            <strong>Target Time:</strong> <span className="font-bold text-purple-700">{requestModal.data.requested_time}</span>
-                        </p>
-                    )}
-                </div>
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <div className="flex items-center text-yellow-800 font-semibold mb-2">
+                      <Info className="w-5 h-5 mr-2" /> Requested Change:
+                  </div>
+                  <p className="text-gray-700">{requestModal.data.message}</p>
+                  {requestModal.data.requested_time && (
+                      <p className="mt-2 text-sm text-gray-600">
+                          <strong>Target Time:</strong> <span className="font-bold text-purple-700">{requestModal.data.requested_time}</span>
+                      </p>
+                  )}
+              </div>
 
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <h4 className="text-lg font-semibold text-gray-700 mb-3 flex items-center">
-                        <User className="w-5 h-5 mr-2" /> Patient Contact Info
-                    </h4>
-                    {requestModal.loadingDetails ? (
-                        <div className="flex items-center text-gray-500">
-                            <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Loading details...
-                        </div>
-                    ) : requestModal.patientDetails ? (
-                        <div className="space-y-1 text-sm text-gray-600">
-                            <p><strong>Name:</strong> {requestModal.patientDetails.name || 'N/A'}</p>
-                            <p><strong>Email:</strong> {requestModal.patientDetails.email || 'N/A'}</p>
-                            <p><strong>Phone:</strong> {requestModal.patientDetails.phone || 'N/A'}</p>
-                            <p><strong>Patient ID:</strong> {requestModal.data.patient_id.substring(0, 8)}...</p>
-                        </div>
-                    ) : (
-                        <p className="text-red-500 text-sm">Could not retrieve patient details.</p>
-                    )}
-                </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h4 className="text-lg font-semibold text-gray-700 mb-3 flex items-center">
+                      <User className="w-5 h-5 mr-2" /> Caregiver Contact Info
+                  </h4>
+                  {requestModal.loadingDetails ? (
+                      <div className="flex items-center text-gray-500">
+                          <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Loading details...
+                      </div>
+                  ) : requestModal.patientDetails ? (
+                      <div className="space-y-1 text-sm text-gray-600">
+                          <p><strong>Name:</strong> {requestModal.patientDetails.name || 'N/A'}</p>
+                          <p><strong>Email:</strong> {requestModal.patientDetails.email || 'N/A'}</p>
+                          <p><strong>Phone:</strong> {requestModal.patientDetails.phone || 'N/A'}</p>
+                          <p><strong>Caregiver ID:</strong> {requestModal.data.patient_id.substring(0, 8)}...</p>
+                      </div>
+                  ) : (
+                      <p className="text-red-500 text-sm">Could not retrieve caregiver details.</p>
+                  )}
+              </div>
             </div>
             
             <div className="mt-6 flex justify-end space-x-3 border-t pt-4">
@@ -840,6 +878,7 @@ const TherapistDashboard = ({ user }) => {
           </div>
         </div>
       )}
+      
       {therapistMessageModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black bg-opacity-60" onClick={() => !therapistMessageModal.saving && setTherapistMessageModal({ isOpen: false, patientId: null, saving: false })}></div>
@@ -879,7 +918,7 @@ const TherapistDashboard = ({ user }) => {
                 >
                     {therapistMessageModal.saving ? (
                         <>
-                          <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Saving...
+                          <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Sending...
                         </>
                     ) : (
                         'Send Notification'

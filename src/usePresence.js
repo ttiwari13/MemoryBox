@@ -1,6 +1,5 @@
-// usePresence.js
 import { useEffect } from 'react';
-import { supabase } from './supabaseClient';
+import { supabase } from '../supabaseClient'; 
 
 export const usePresence = (userId) => {
   useEffect(() => {
@@ -13,7 +12,7 @@ export const usePresence = (userId) => {
           is_online: true,
           last_seen: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'user_id' }); 
     };
     const setOffline = async () => {
       await supabase
@@ -25,18 +24,8 @@ export const usePresence = (userId) => {
         })
         .eq('user_id', userId);
     };
-    const heartbeat = setInterval(async () => {
-      await supabase
-        .from('user_presence')
-        .upsert({
-          user_id: userId,
-          is_online: true,
-          last_seen: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-    }, 30000);
-
     setOnline();
+    const heartbeat = setInterval(setOnline, 30000); 
     const handleVisibilityChange = () => {
       if (document.hidden) {
         setOffline();
@@ -44,9 +33,8 @@ export const usePresence = (userId) => {
         setOnline();
       }
     };
-
     const handleBeforeUnload = () => {
-      setOffline();
+      setOffline(); 
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
