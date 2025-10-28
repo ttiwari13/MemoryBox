@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { supabase } from '../supabaseClient'; 
+import { supabase } from '../supabaseClient';
 import { Calendar, DollarSign, UserCheck, Trash2, CheckCircle, XCircle, RefreshCw, MessageSquare, Info, User, Edit3, Save, X, LogOut, Clock, Send } from 'lucide-react';
+
+const PHOTO_PLACEHOLDER = "https://via.placeholder.com/150?text=Therapist";
+
 const TherapistDashboard = ({ user }) => {
   const [profile, setProfile] = useState({
     name: "",
@@ -8,7 +11,7 @@ const TherapistDashboard = ({ user }) => {
     rate: 0,
     phone: "",
     specialization: "",
-    email: "", 
+    email: "",
   });
   const [availability, setAvailability] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -22,15 +25,16 @@ const TherapistDashboard = ({ user }) => {
   const [therapistMessage, setTherapistMessage] = useState("");
   const [editingSlotId, setEditingSlotId] = useState(null);
   const [editedSlot, setEditedSlot] = useState(null);
-  
+  const [requestFilter, setRequestFilter] = useState('all');
+
   const notify = (message, type = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
-  
+
   const formatTime = (time) => time ? new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-  
+
   const fetchProfile = useCallback(async (therapistId) => {
     try {
       const { data, error } = await supabase
@@ -38,9 +42,7 @@ const TherapistDashboard = ({ user }) => {
         .select('id, name, email, phone, degree, rate, photo_url, specialization')
         .eq('id', therapistId)
         .single();
-        
-      if (error && error.code !== 'PGRST116') throw error; 
-      
+
       const initialProfile = {
           name: user?.user_metadata?.full_name || "Therapist Name",
           degree: "Add your degree",
@@ -50,27 +52,55 @@ const TherapistDashboard = ({ user }) => {
           email: user?.email || "",
           specialization: ""
       };
-      
+
       if (data) {
         setProfile({
           ...initialProfile,
           name: data.name || initialProfile.name,
           degree: data.degree || initialProfile.degree,
-          rate: parseFloat(data.rate) || initialProfile.rate, 
+          rate: parseFloat(data.rate) || initialProfile.rate,
           photo_url: data.photo_url || initialProfile.photo_url,
           phone: data.phone || initialProfile.phone,
           specialization: data.specialization || initialProfile.specialization,
           email: data.email || initialProfile.email,
         });
-      } else {
+      } else if (error && error.code === 'PGRST116') {
+        console.log("No profile found, creating initial profile...");
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: therapistId,
+            name: initialProfile.name,
+            email: initialProfile.email,
+            phone: initialProfile.phone,
+            degree: initialProfile.degree,
+            rate: initialProfile.rate,
+            photo_url: initialProfile.photo_url,
+            specialization: initialProfile.specialization,
+            updated_at: new Date().toISOString()
+          }]);
+
+        if (insertError) {
+          console.error("Error creating initial profile:", insertError);
+        } else {
+          console.log("Initial profile created successfully");
+        }
+
         setProfile(initialProfile);
-        notify("Profile not found. Please update your details.", 'info');
+        notify("Welcome! Please complete your profile.", 'info');
+      } else {
+        throw error;
       }
     } catch (err) {
       console.error("Error fetching profile:", err.message);
-      setProfile({ 
-        name: user?.user_metadata?.full_name || "Therapist Name", degree: "Add your degree", rate: 0, 
-        photo_url: PHOTO_PLACEHOLDER, phone: "", email: user?.email || "", specialization: ""
+      setProfile({
+        name: user?.user_metadata?.full_name || "Therapist Name",
+        degree: "Add your degree",
+        rate: 0,
+        photo_url: PHOTO_PLACEHOLDER,
+        phone: "",
+        email: user?.email || "",
+        specialization: ""
       });
       notify("Failed to load profile.", 'error');
     }
@@ -80,7 +110,7 @@ const TherapistDashboard = ({ user }) => {
     try {
       const { data, error } = await supabase
         .from("therapist_availability")
-        .select("id, date, time, mode, is_booked, booked_by_patient_id") 
+        .select("id, date, time, mode, is_booked, booked_by_patient_id")
         .eq("therapist_id", therapistId)
         .order("date", { ascending: true })
         .order("time", { ascending: true });
@@ -89,12 +119,13 @@ const TherapistDashboard = ({ user }) => {
       setAvailability(data || []);
     } catch (err) {
       console.error("Error fetching availability:", err.message);
-      notify("Failed to load schedule. (DB Check: therapist_availability table)", 'error');
+      notify("Failed to load schedule.", 'error');
     }
   }, []);
-  
+
   const fetchRequests = useCallback(async (therapistId) => {
     try {
+      console.log("🔍 Fetching ALL requests for therapist:", therapistId);
       const { data, error } = await supabase
         .from("change_requests")
         .select("id, patient_id, message, created_at, requested_time, status")
@@ -102,21 +133,25 @@ const TherapistDashboard = ({ user }) => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setRequests((data || []).filter(r => r.status === 'pending'));
+      
+      console.log("✅ Fetched requests:", data);
+      console.log("Total requests count:", data?.length || 0);
+      
+      setRequests(data || []);
     } catch (err) {
       console.error("Error fetching requests:", err.message);
-      notify("Failed to load patient requests. (DB Check: change_requests table)", 'error');
+      notify("Failed to load patient requests.", 'error');
     }
   }, []);
-  
+
   const openEditProfileModal = () => {
     setEditedProfile({ ...profile });
     setEditProfileModal({ isOpen: true, saving: false });
   };
-  
+
   const saveProfile = async () => {
     setEditProfileModal(prev => ({ ...prev, saving: true }));
-    
+
     try {
       const { error } = await supabase
         .from('profiles')
@@ -131,9 +166,9 @@ const TherapistDashboard = ({ user }) => {
           specialization: editedProfile.specialization,
           updated_at: new Date().toISOString()
         });
-        
+
       if (error) throw error;
-      
+
       setProfile({ ...editedProfile, rate: parseFloat(editedProfile.rate) || 0 });
       setEditProfileModal({ isOpen: false, saving: false });
       notify("Profile updated successfully!");
@@ -143,7 +178,7 @@ const TherapistDashboard = ({ user }) => {
       setEditProfileModal(prev => ({ ...prev, saving: false }));
     }
   };
-  
+
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -153,13 +188,13 @@ const TherapistDashboard = ({ user }) => {
       notify("Sign out failed.", 'error');
     }
   };
-  
+
   useEffect(() => {
     if (!user) {
         setLoading(false);
         return;
     }
-    
+
     const setOnlineStatus = async () => {
       await supabase
         .from('user_presence')
@@ -168,9 +203,9 @@ const TherapistDashboard = ({ user }) => {
           is_online: true,
           last_seen: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' }); 
+        }, { onConflict: 'user_id' });
     };
-    
+
     const setOfflineStatus = async () => {
       await supabase
         .from('user_presence')
@@ -190,6 +225,7 @@ const TherapistDashboard = ({ user }) => {
     fetchProfile(user.id);
     fetchAvailability(user.id);
     fetchRequests(user.id);
+    
     const availChannel = supabase
       .channel("avail_updates")
       .on(
@@ -198,25 +234,31 @@ const TherapistDashboard = ({ user }) => {
         () => fetchAvailability(user.id)
       )
       .subscribe();
-      
+
     const reqChannel = supabase
       .channel("request_updates")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "change_requests", filter: `therapist_id=eq.${user.id}` },
         (payload) => {
+          console.log("📢 Request update received:", payload);
+          console.log("Event type:", payload.eventType);
+          console.log("Payload data:", payload.new);
+          
           if (payload.eventType !== 'DELETE') {
               fetchRequests(user.id);
               if (payload.eventType === 'INSERT' && payload.new?.status === 'pending') {
                   notify("New schedule change request received!", 'info');
+              } else if (payload.eventType === 'UPDATE') {
+                  console.log(`Status updated to: ${payload.new?.status}`);
               }
           }
         }
       )
       .subscribe();
-    
+
     setLoading(false);
-    
+
     return () => {
       clearInterval(heartbeat);
       setOfflineStatus();
@@ -224,14 +266,14 @@ const TherapistDashboard = ({ user }) => {
       supabase.removeChannel(reqChannel);
     };
   }, [user, fetchProfile, fetchAvailability, fetchRequests]);
-  
+
  const addAvailability = async (e) => {
     e.preventDefault();
     if (!newSlot.date || !newSlot.time) return notify("Please enter both date and time.", 'error');
     const selectedDate = new Date(newSlot.date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     if (selectedDate < today) {
       return notify("Cannot add slots for past dates.", 'error');
     }
@@ -243,21 +285,22 @@ const TherapistDashboard = ({ user }) => {
           date: newSlot.date,
           time: newSlot.time,
           mode: newSlot.mode,
-          is_booked: false, 
+          is_booked: false,
         },
       ]);
       if (error) throw error;
       setNewSlot({ date: "", time: "", mode: "online" });
       notify("Slot added successfully!");
-      fetchAvailability(user.id); 
+      fetchAvailability(user.id);
     } catch (err) {
       console.error("Error adding slot:", err.message);
-      notify("Failed to add slot. (DB Check: is_booked column)", 'error');
+      notify("Failed to add slot.", 'error');
     }
   };
+  
   const deleteAvailability = async (id) => {
     if (!confirm('Are you sure you want to delete this slot?')) return;
-    
+
     try {
       const { error } = await supabase
         .from("therapist_availability")
@@ -271,12 +314,12 @@ const TherapistDashboard = ({ user }) => {
       notify("Failed to delete slot.", 'error');
     }
   };
-  
+
   const handleEditStart = (slot) => {
     setEditingSlotId(slot.id);
     setEditedSlot({ ...slot });
   };
-  
+
   const handleSlotChange = (field, value) => {
     setEditedSlot(prev => ({ ...prev, [field]: value }));
   };
@@ -287,15 +330,15 @@ const TherapistDashboard = ({ user }) => {
     try {
       const { error } = await supabase
         .from("therapist_availability")
-        .update({ 
-            date: editedSlot.date, 
-            time: editedSlot.time, 
-            mode: editedSlot.mode 
+        .update({
+            date: editedSlot.date,
+            time: editedSlot.time,
+            mode: editedSlot.mode
         })
         .eq("id", editedSlot.id);
-      
+
       if (error) throw error;
-      
+
       setEditingSlotId(null);
       setEditedSlot(null);
       notify("Slot updated successfully!");
@@ -304,12 +347,12 @@ const TherapistDashboard = ({ user }) => {
       notify("Failed to update slot. " + err.message, 'error');
     }
   };
-  
+
   const handleCancelEdit = () => {
     setEditingSlotId(null);
     setEditedSlot(null);
   };
-  
+
   const fetchPatientDetails = async (patientId) => {
       setRequestModal(prev => ({ ...prev, loadingDetails: true }));
       try {
@@ -319,53 +362,46 @@ const TherapistDashboard = ({ user }) => {
               .select('id, email, name, phone')
               .eq('id', patientId)
               .maybeSingle();
-          
+
           console.log("Response data:", data);
           console.log("Response error:", error);
-              
+
           if (error) {
-              console.error("Supabase error details:", {
-                  message: error.message,
-                  details: error.details,
-                  hint: error.hint,
-                  code: error.code
-              });
+              console.error("Supabase error details:", error);
               throw error;
           }
-        
+
           if (!data) {
               console.warn("No caregiver profile found in database");
-              
-              setRequestModal(prev => ({ 
-                  ...prev, 
+              setRequestModal(prev => ({
+                  ...prev,
                   patientDetails: {
                       name: "Caregiver profile not found",
                       email: "Not available",
                       phone: "Not available",
                       id: patientId
                   },
-                  loadingDetails: false 
+                  loadingDetails: false
               }));
               return;
           }
-          
+
           console.log("Successfully fetched caregiver data:", data);
-          
-          setRequestModal(prev => ({ 
-              ...prev, 
+          setRequestModal(prev => ({
+              ...prev,
               patientDetails: data,
-              loadingDetails: false 
+              loadingDetails: false
           }));
       } catch (error) {
           console.error("Error fetching caregiver details:", error);
-          setRequestModal(prev => ({ 
-              ...prev, 
-              patientDetails: { 
-                  name: "Unable to fetch", 
-                  email: error.message || "Check console", 
-                  phone: "N/A" 
+          setRequestModal(prev => ({
+              ...prev,
+              patientDetails: {
+                  name: "Unable to fetch",
+                  email: error.message || "Check console",
+                  phone: "N/A"
               },
-              loadingDetails: false 
+              loadingDetails: false
           }));
           notify("Failed to fetch caregiver details: " + (error.message || "Unknown error"), 'error');
       }
@@ -375,29 +411,51 @@ const TherapistDashboard = ({ user }) => {
       setRequestModal({ isOpen: true, data: request, patientDetails: null, loadingDetails: false });
       fetchPatientDetails(request.patient_id);
   };
-  
+
   const handleRequestAction = async (newStatus) => {
       const requestId = requestModal.data.id;
       setRequestModal(prev => ({ ...prev, loadingDetails: true }));
 
       try {
-          const { error } = await supabase
-              .from('change_requests')
-              .update({ status: newStatus })
-              .eq('id', requestId);
-              
-          if (error) throw error;
+          console.log(`🔄 Updating request ${requestId} to status: ${newStatus}`);
           
+          const { data, error } = await supabase
+              .from('change_requests')
+              .update({ 
+                status: newStatus,
+                updated_at: new Date().toISOString() // Add timestamp to trigger update
+              })
+              .eq('id', requestId)
+              .select();
+
+          if (error) throw error;
+
+          console.log(`✅ Request updated successfully:`, data);
+
           const msg = newStatus === 'accepted' ? "Request accepted! Patient notified." : "Request declined.";
           notify(msg);
+          
+          // Update local state immediately
+          setRequests(prevRequests => 
+            prevRequests.map(req => 
+              req.id === requestId ? { ...req, status: newStatus } : req
+            )
+          );
+          
+          // Close modal
           setRequestModal({ isOpen: false, data: null, patientDetails: null, loadingDetails: false });
-          fetchRequests(user.id);
+          
+          // Also fetch to ensure sync
+          await fetchRequests(user.id);
+          
+          console.log(`🔃 Requests list refreshed`);
       } catch (error) {
-          console.error(`Error ${newStatus}ing request:`, error);
+          console.error(`❌ Error ${newStatus}ing request:`, error);
           notify(`Failed to ${newStatus} request.`, 'error');
+          setRequestModal(prev => ({ ...prev, loadingDetails: false }));
       }
   };
-  
+
   const openTherapistMessageModal = (patientId) => {
     setTherapistMessage("");
     setTherapistMessageModal({ isOpen: true, patientId: patientId, saving: false });
@@ -413,11 +471,11 @@ const TherapistDashboard = ({ user }) => {
         const { error } = await supabase
             .from('change_requests')
             .insert([
-              { 
-                therapist_id: user.id, 
-                patient_id: therapistMessageModal.patientId, 
+              {
+                therapist_id: user.id,
+                patient_id: therapistMessageModal.patientId,
                 message: `THERAPIST MESSAGE: ${therapistMessage.trim()}`,
-                status: 'therapist_initiated', 
+                status: 'therapist_initiated',
               },
             ]);
 
@@ -432,11 +490,19 @@ const TherapistDashboard = ({ user }) => {
         setTherapistMessageModal(prev => ({ ...prev, saving: false }));
     }
   };
-  
+
   const getPatientIdForSlot = (slot) => {
     return slot.booked_by_patient_id || null;
   };
-  
+
+  // Filter requests
+  const filteredRequests = requests.filter(request => {
+    if (requestFilter === 'all') return true;
+    return request.status === requestFilter;
+  });
+
+  const pendingCount = requests.filter(r => r.status === 'pending').length;
+
   if (!user) {
     return (
       <div className="flex justify-center items-center min-h-[50vh] bg-red-50 p-6">
@@ -452,11 +518,13 @@ const TherapistDashboard = ({ user }) => {
         <h1 className="text-4xl font-extrabold text-purple-700 mb-6 flex items-center">
             <UserCheck className="w-8 h-8 mr-3" /> Therapist Portal
         </h1>
+        
         {notification && (
             <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-2xl z-50 text-white ${notification.type === 'success' ? 'bg-green-500' : notification.type === 'info' ? 'bg-blue-500' : 'bg-red-500'}`}>
                 {notification.message}
             </div>
         )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             <div className="lg:col-span-2 bg-white shadow-xl rounded-2xl p-6 flex flex-col sm:flex-row items-center sm:items-start gap-4 border border-purple-200 relative">
                 <div className="absolute top-4 right-4 flex space-x-2">
@@ -475,41 +543,168 @@ const TherapistDashboard = ({ user }) => {
                       <LogOut className="w-5 h-5" />
                     </button>
                 </div>
-                
-                <img src={profile.photo_url} alt={profile.name} className="w-24 h-24 rounded-full object-cover shadow-lg" 
+
+                <img src={profile.photo_url} alt={profile.name} className="w-24 h-24 rounded-full object-cover shadow-lg"
                     onError={(e) => e.target.src = PHOTO_PLACEHOLDER} />
                 <div className="text-center sm:text-left flex-1">
                     <h2 className="text-2xl font-bold text-gray-900">{profile.name}</h2>
                     <p className="text-purple-600 font-medium mb-1">{profile.degree}</p>
                     {profile.specialization && (
-                      <p className="text-sm text-gray-600 mb-2"> {profile.specialization}</p>
+                      <p className="text-sm text-gray-600 mb-2">🎯 {profile.specialization}</p>
                     )}
                     <div className="flex items-center justify-center sm:justify-start text-lg text-gray-700 mb-2">
-                        <DollarSign className="w-5 h-5 mr-1 text-green-600" /> 
-                        <span className="font-semibold">{profile.rate.toFixed(2)}</span> / hr
+                        <Clock className="w-5 h-5 mr-1 text-green-600" />
+                        <span className="font-semibold">₹ {profile.rate.toFixed(2)}</span> / hr
                     </div>
                     {profile.phone && (
-                      <p className="text-sm text-gray-600">{profile.phone}</p>
+                      <p className="text-sm text-gray-600">📞 {profile.phone}</p>
                     )}
                     <p className="text-sm text-gray-600">✉️ {profile.email}</p>
                 </div>
             </div>
+            
             <div className="bg-purple-600 text-white shadow-xl rounded-2xl p-6 flex items-center justify-between transition-transform hover:scale-[1.02] cursor-pointer"
-                onClick={requests.length > 0 ? () => openRequestModal(requests[0]) : null}>
+                onClick={pendingCount > 0 ? () => openRequestModal(requests.find(r => r.status === 'pending')) : null}>
                 <div className="flex items-center gap-4">
                     <MessageSquare className="w-8 h-8" />
                     <div>
-                        <p className="text-xl font-bold">{requests.length}</p>
+                        <p className="text-xl font-bold">{pendingCount}</p>
                         <p className="text-sm opacity-80">Pending Requests</p>
+                        <p className="text-xs opacity-60 mt-1">{requests.length} total</p>
                     </div>
                 </div>
-                {requests.length > 0 && (
+                {pendingCount > 0 && (
                     <span className="bg-white text-purple-600 px-3 py-1 rounded-full font-bold animate-pulse text-sm">
                         NEW
                     </span>
                 )}
             </div>
         </div>
+
+        {/* Patient Requests Section */}
+        <div className="bg-white shadow-xl rounded-2xl p-6 border border-gray-200 mb-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <h2 className="text-2xl font-bold text-purple-700 flex items-center">
+                    <MessageSquare className="w-6 h-6 mr-2" /> Patient Requests
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() => setRequestFilter('all')}
+                        className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${
+                            requestFilter === 'all' 
+                            ? 'bg-purple-600 text-white' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        All ({requests.length})
+                    </button>
+                    <button
+                        onClick={() => setRequestFilter('pending')}
+                        className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${
+                            requestFilter === 'pending' 
+                            ? 'bg-yellow-500 text-white' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        Pending ({pendingCount})
+                    </button>
+                    <button
+                        onClick={() => setRequestFilter('accepted')}
+                        className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${
+                            requestFilter === 'accepted' 
+                            ? 'bg-green-500 text-white' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        Accepted
+                    </button>
+                    <button
+                        onClick={() => setRequestFilter('declined')}
+                        className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${
+                            requestFilter === 'declined' 
+                            ? 'bg-red-500 text-white' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        Declined
+                    </button>
+                </div>
+            </div>
+
+            {loading ? (
+                <p className="text-center text-gray-500 py-8">Loading requests...</p>
+            ) : (
+                <>
+                    {/* Debug Info */}
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
+                        <p><strong>Debug Info:</strong></p>
+                        <p>Total Requests: {requests.length}</p>
+                        <p>Filtered Requests: {filteredRequests.length}</p>
+                        <p>Current Filter: {requestFilter}</p>
+                        <p>Status breakdown: 
+                            Pending: {requests.filter(r => r.status === 'pending').length}, 
+                            Accepted: {requests.filter(r => r.status === 'accepted').length}, 
+                            Declined: {requests.filter(r => r.status === 'declined').length}
+                        </p>
+                    </div>
+
+                    {filteredRequests.length === 0 ? (
+                        <p className="text-center text-gray-500 py-8">
+                            {requestFilter === 'all' 
+                                ? 'No requests yet.' 
+                                : `No ${requestFilter} requests.`}
+                        </p>
+                    ) : (
+                        <div className="space-y-4">
+                            {filteredRequests.map((request) => (
+                                <div
+                                    key={request.id}
+                                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition cursor-pointer hover:border-purple-300"
+                                    onClick={() => openRequestModal(request)}
+                                >
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex-1">
+                                            <p className="text-sm text-gray-600 mb-1">
+                                                Patient ID: <span className="font-mono text-xs">{request.patient_id.substring(0, 12)}...</span>
+                                            </p>
+                                            <p className="text-gray-800 font-medium">{request.message}</p>
+                                            {request.requested_time && (
+                                                <p className="text-sm text-purple-600 mt-1">
+                                                    <Clock className="w-4 h-4 inline mr-1" />
+                                                    Requested: {request.requested_time}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ml-2 ${
+                                            request.status === 'pending' 
+                                                ? 'bg-yellow-100 text-yellow-800' 
+                                                : request.status === 'accepted' 
+                                                ? 'bg-green-100 text-green-800' 
+                                                : request.status === 'declined'
+                                                ? 'bg-red-100 text-red-800'
+                                                : 'bg-blue-100 text-blue-800'
+                                        }`}>
+                                            {request.status.toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                        {new Date(request.created_at).toLocaleString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        })}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+
+        {/* Availability Management Section */}
         <div className="bg-white shadow-xl rounded-2xl p-6 border border-gray-200">
             <h2 className="text-2xl font-bold text-purple-700 mb-6 flex items-center">
                 <Calendar className="w-6 h-6 mr-2" /> Manage Availability
@@ -547,6 +742,7 @@ const TherapistDashboard = ({ user }) => {
                 Add Slot
               </button>
             </form>
+            
             {loading ? (
               <p className="text-center text-gray-500">Loading schedule...</p>
             ) : availability.length === 0 ? (
@@ -574,7 +770,6 @@ const TherapistDashboard = ({ user }) => {
                         key={slot.id}
                         className={`border-b hover:bg-purple-50 transition ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${isEditing ? 'bg-purple-100/50' : ''}`}
                       >
-                        {/* Date */}
                         <td className="px-4 py-3 text-sm text-gray-800">
                             {isEditing ? (
                                 <input
@@ -587,8 +782,7 @@ const TherapistDashboard = ({ user }) => {
                                 formatDate(currentSlot.date)
                             )}
                         </td>
-                        
-                        {/* Time */}
+
                         <td className="px-4 py-3 text-sm text-gray-800">
                             {isEditing ? (
                                 <input
@@ -601,8 +795,7 @@ const TherapistDashboard = ({ user }) => {
                                 formatTime(currentSlot.time)
                             )}
                         </td>
-                        
-                        {/* Mode */}
+
                         <td className="px-4 py-3 text-sm text-gray-800 capitalize">
                             {isEditing ? (
                                 <select
@@ -617,19 +810,17 @@ const TherapistDashboard = ({ user }) => {
                                 currentSlot.mode
                             )}
                         </td>
-                        
-                        {/* Status */}
+
                         <td className="px-4 py-3 text-center text-sm">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full font-semibold ${
-                                isBooked 
-                                        ? 'bg-red-100 text-red-800' 
+                                isBooked
+                                        ? 'bg-red-100 text-red-800'
                                         : 'bg-green-100 text-green-800'
                             }`}>
                                 {isBooked ? 'Booked' : 'Available'}
                             </span>
                         </td>
-                        
-                        {/* Action */}
+
                         <td className="px-4 py-3 text-center">
                             {isEditing ? (
                                 <div className="flex justify-center space-x-2">
@@ -679,7 +870,7 @@ const TherapistDashboard = ({ user }) => {
                         </td>
                       </tr>
                       );
-                        })}
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -687,10 +878,11 @@ const TherapistDashboard = ({ user }) => {
         </div>
       </div>
 
+      {/* Edit Profile Modal */}
       {editProfileModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black bg-opacity-60" onClick={() => !editProfileModal.saving && setEditProfileModal({ isOpen: false, saving: false })}></div>
-          
+
           <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setEditProfileModal({ isOpen: false, saving: false })}
@@ -699,11 +891,11 @@ const TherapistDashboard = ({ user }) => {
             >
               <X className="w-6 h-6" />
             </button>
-            
+
             <h3 className="text-2xl font-bold text-purple-700 mb-6 flex items-center">
               <Edit3 className="w-6 h-6 mr-2" /> Edit Profile
             </h3>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
@@ -716,7 +908,7 @@ const TherapistDashboard = ({ user }) => {
                   disabled={editProfileModal.saving}
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Degree / Qualification</label>
                 <input
@@ -728,7 +920,7 @@ const TherapistDashboard = ({ user }) => {
                   disabled={editProfileModal.saving}
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Specialization</label>
                 <input
@@ -740,21 +932,21 @@ const TherapistDashboard = ({ user }) => {
                   disabled={editProfileModal.saving}
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate ($)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (₹)</label>
                   <input
                     type="number"
                     step="0.01"
                     value={editedProfile.rate || ""}
                     onChange={(e) => setEditedProfile({ ...editedProfile, rate: e.target.value })}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-purple-500 focus:border-purple-500"
-                    placeholder="150.00"
+                    placeholder="1500.00"
                     disabled={editProfileModal.saving}
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                   <input
@@ -762,12 +954,12 @@ const TherapistDashboard = ({ user }) => {
                     value={editedProfile.phone || ""}
                     onChange={(e) => setEditedProfile({ ...editedProfile, phone: e.target.value })}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-purple-500 focus:border-purple-500"
-                    placeholder="+1 234 567 8900"
+                    placeholder="+91 98765 43210"
                     disabled={editProfileModal.saving}
                   />
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input
@@ -781,7 +973,7 @@ const TherapistDashboard = ({ user }) => {
                 <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
               </div>
             </div>
-            
+
             <div className="mt-6 flex justify-end space-x-3 border-t pt-4">
               <button
                 onClick={() => setEditProfileModal({ isOpen: false, saving: false })}
@@ -809,11 +1001,12 @@ const TherapistDashboard = ({ user }) => {
           </div>
         </div>
       )}
-      
+
+      {/* Request Details Modal */}
       {requestModal.isOpen && requestModal.data && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black bg-opacity-60" onClick={() => setRequestModal({ isOpen: false, data: null, patientDetails: null })}></div>
-          
+
           <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 sm:p-8 transform transition-all">
             <button
               onClick={() => setRequestModal({ isOpen: false, data: null, patientDetails: null })}
@@ -821,9 +1014,9 @@ const TherapistDashboard = ({ user }) => {
             >
               <XCircle className="w-6 h-6" />
             </button>
-            
+
             <h3 className="text-2xl font-bold text-purple-700 mb-6 border-b pb-2">Patient Schedule Change Request</h3>
-            
+
             <div className="space-y-4">
               <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
                   <div className="flex items-center text-yellow-800 font-semibold mb-2">
@@ -857,31 +1050,43 @@ const TherapistDashboard = ({ user }) => {
                   )}
               </div>
             </div>
-            
+
             <div className="mt-6 flex justify-end space-x-3 border-t pt-4">
-                <button
-                    onClick={() => handleRequestAction('declined')}
-                    className="flex items-center px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition"
-                    disabled={requestModal.loadingDetails}
-                >
-                    <XCircle className="w-4 h-4 mr-2" /> Decline
-                </button>
-                <button
-                    onClick={() => handleRequestAction('accepted')}
-                    className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition"
-                    disabled={requestModal.loadingDetails}
-                >
-                    <CheckCircle className="w-4 h-4 mr-2" /> Accept
-                </button>
+                {requestModal.data.status === 'pending' ? (
+                    <>
+                        <button
+                            onClick={() => handleRequestAction('declined')}
+                            className="flex items-center px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition"
+                            disabled={requestModal.loadingDetails}
+                        >
+                            <XCircle className="w-4 h-4 mr-2" /> Decline
+                        </button>
+                        <button
+                            onClick={() => handleRequestAction('accepted')}
+                            className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition"
+                            disabled={requestModal.loadingDetails}
+                        >
+                            <CheckCircle className="w-4 h-4 mr-2" /> Accept
+                        </button>
+                    </>
+                ) : (
+                    <button
+                        onClick={() => setRequestModal({ isOpen: false, data: null, patientDetails: null, loadingDetails: false })}
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition"
+                    >
+                        Close
+                    </button>
+                )}
             </div>
           </div>
         </div>
       )}
-      
+
+      {/* Therapist Message Modal */}
       {therapistMessageModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black bg-opacity-60" onClick={() => !therapistMessageModal.saving && setTherapistMessageModal({ isOpen: false, patientId: null, saving: false })}></div>
-          
+
           <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 sm:p-8">
             <button
               onClick={() => setTherapistMessageModal({ isOpen: false, patientId: null, saving: false })}
@@ -890,15 +1095,15 @@ const TherapistDashboard = ({ user }) => {
             >
               <X className="w-6 h-6" />
             </button>
-            
+
             <h3 className="text-2xl font-bold text-blue-700 mb-4 flex items-center">
               <Send className="w-6 h-6 mr-2" /> Notify Patient of Change
             </h3>
-            
+
             <p className="text-gray-600 mb-6">
               Send a notification to the patient (ID: {therapistMessageModal.patientId ? therapistMessageModal.patientId.substring(0, 8) + '...' : 'N/A'}) regarding a cancellation or proposed time change.
             </p>
-            
+
             <form onSubmit={handleTherapistMessageSend} className="space-y-4">
                 <textarea
                     value={therapistMessage}
@@ -910,6 +1115,7 @@ const TherapistDashboard = ({ user }) => {
                 ></textarea>
                 <button
                     type="submit"
+
                     disabled={!therapistMessage.trim() || therapistMessageModal.saving}
                     className={`w-full py-3 rounded-lg font-semibold text-white transition-colors flex items-center justify-center ${
                         therapistMessageModal.saving ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'

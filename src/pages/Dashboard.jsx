@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { User, HelpCircle, Pill, CheckSquare, UserCircle, Edit3, Save, X, Plus, Trash2, Menu, UserCheck } from 'lucide-react';
 import Quizzes from './Quizzes';
-import ContactContent from './ContactContent';
 import MedicineContent from './MedicineContent';
 import TaskContent from './TaskContent';
 import Profile from './Profile';
@@ -205,8 +204,6 @@ const Dashboard = ({ user }) => {
     switch (activeTab) {
       case 'quizzes':
         return <Quizzes />;
-      case 'contact':
-        return <ContactContent />;
       case 'medicines':
         return <MedicineContent />;
       case 'tasks':
@@ -547,7 +544,6 @@ const Dashboard = ({ user }) => {
   };
   const navItems = [
     { id: 'quizzes', icon: HelpCircle, label: 'Quizzes' },
-    { id: 'contact', icon: User, label: 'Contact' },
     { id: 'medicines', icon: Pill, label: 'Medicines' },
     { id: 'tasks', icon: CheckSquare, label: 'Tasks' },
     { id: 'therapist', icon: UserCheck, label: 'Therapists' }, 

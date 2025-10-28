@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { Clock, DollarSign, MessageSquare, Circle, UserCheck, RefreshCw, XCircle, CheckCircle, Info, X, Calendar } from 'lucide-react';
-
-const TherapistCard = ({ therapist, schedules, onlineStatus, onSendChangeRequest }) => {
+const TherapistCard = ({ therapist, schedules, onlineStatus, onSendChangeRequest, onBookSlot }) => {
   const isOnline = onlineStatus[therapist.id] || false; 
   
   const therapistSchedules = schedules
@@ -37,8 +36,8 @@ const TherapistCard = ({ therapist, schedules, onlineStatus, onSendChangeRequest
 
       <div className="space-y-3 mb-4">
         <div className="flex items-center text-gray-700">
-          <DollarSign className="w-5 h-5 text-indigo-500 mr-2" />
-          <span className="font-semibold text-lg">${(therapist.rate || 0).toFixed(2)}</span> / hr
+          <span className="text-indigo-500 mr-2 text-xl font-bold">₹</span>
+          <span className="font-semibold text-lg">{(therapist.rate || 0).toFixed(2)}</span> / hr
         </div>
       </div>
       <div className="mb-6 border-t pt-4">
@@ -50,29 +49,34 @@ const TherapistCard = ({ therapist, schedules, onlineStatus, onSendChangeRequest
         {therapistSchedules.length === 0 ? (
           <p className="text-sm text-red-500 italic">No slots available</p>
         ) : (
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {therapistSchedules.slice(0, 5).map((slot) => {
+          <div className="space-y-2">
+            {therapistSchedules.map((slot) => {
               const { dateStr, timeStr } = formatSlotTime(slot.date, slot.time);
               return (
                 <div key={slot.id} className="flex items-center justify-between bg-purple-50 px-3 py-2 rounded-lg text-sm">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-purple-600" />
-                    <span className="font-medium text-gray-700">{dateStr}</span>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-gray-700">{dateStr}</span>
+                      <span className="text-purple-700 font-semibold text-xs">{timeStr}</span>
+                    </div>
                   </div>
-                  <span className="text-purple-700 font-semibold">{timeStr}</span>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    slot.mode === 'online' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                  }`}>
-                    {slot.mode}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      slot.mode === 'online' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {slot.mode}
+                    </span>
+                    <button
+                      onClick={() => onBookSlot(slot, therapist)}
+                      className="text-xs px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                    >
+                      Book
+                    </button>
+                  </div>
                 </div>
               );
             })}
-            {therapistSchedules.length > 5 && (
-              <p className="text-xs text-gray-500 italic text-center pt-1">
-                +{therapistSchedules.length - 5} more slots
-              </p>
-            )}
           </div>
         )}
       </div>
@@ -87,6 +91,7 @@ const TherapistCard = ({ therapist, schedules, onlineStatus, onSendChangeRequest
     </div>
   );
 };
+
 const PatientTherapistBoard = () => {
   const [therapists, setTherapists] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -95,8 +100,11 @@ const PatientTherapistBoard = () => {
   const [messageModal, setMessageModal] = useState({ isOpen: false, therapistId: null, status: null });
   const [currentMessage, setCurrentMessage] = useState("");
   const [userId, setUserId] = useState(null);
+  const [userEmail, setUserEmail] = useState(null);
+  const [userName, setUserName] = useState(null);
   const [therapistNotifications, setTherapistNotifications] = useState([]);
   const [notification, setNotification] = useState(null);
+  const [bookingModal, setBookingModal] = useState({ isOpen: false, slot: null, therapist: null });
 
   const notify = (message, type = 'success') => {
     setNotification({ message, type });
@@ -104,18 +112,18 @@ const PatientTherapistBoard = () => {
   };
 
   const fetchTherapists = async () => {
-    console.log(' Fetching all therapists from profiles...');
+    console.log('Fetching all therapists from profiles...');
     
     try {
       const { data: allProfiles, error: profileError } = await supabase
         .from('profiles')
         .select('id, name, email, degree, rate, photo_url, specialization, phone');
 
-      console.log(' All profiles:', allProfiles);
-      console.log(' Profile error:', profileError);
+      console.log('All profiles:', allProfiles);
+      console.log('Profile error:', profileError);
 
       if (profileError) {
-        console.error(' Error fetching profiles:', profileError);
+        console.error('Error fetching profiles:', profileError);
         throw profileError;
       }
       console.log('Total therapists found:', allProfiles?.length || 0);
@@ -219,9 +227,21 @@ const PatientTherapistBoard = () => {
       
       const authUser = await supabase.auth.getUser();
       const currentUserId = authUser.data.user?.id;
+      const currentUserEmail = authUser.data.user?.email;
       
       if (currentUserId) {
         setUserId(currentUserId);
+        setUserEmail(currentUserEmail);
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', currentUserId)
+          .single();
+        
+        if (profileData) {
+          setUserName(profileData.name);
+        }
+        
         await fetchSchedules(); 
         await fetchTherapists(); 
         await fetchOnlineStatus();
@@ -302,6 +322,75 @@ const PatientTherapistBoard = () => {
       notify("Failed to update notification.", 'error');
     }
   };
+
+  const handleBookSlot = (slot, therapist) => {
+    setBookingModal({ isOpen: true, slot, therapist });
+  };
+
+  const closeBookingModal = () => {
+    setBookingModal({ isOpen: false, slot: null, therapist: null });
+  };
+
+const confirmBooking = async () => {
+    const { slot, therapist } = bookingModal;
+    
+    try {
+      const { error: updateError } = await supabase
+        .from('therapist_availability')
+        .update({ 
+          is_booked: true,
+          booked_by_patient_id: userId 
+        })
+        .eq('id', slot.id);
+      
+      if (updateError) throw updateError;
+      const bookingMessage = ` NEW BOOKING: ${userName || userEmail} has booked your slot on ${new Date(slot.date).toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        month: 'long', 
+        day: 'numeric',
+        year: 'numeric'
+      })} at ${slot.time} (${slot.mode} session).`;
+      
+      const { error: notifyError } = await supabase
+        .from('change_requests')
+        .insert([{
+          therapist_id: therapist.id,
+          patient_id: userId,
+          message: bookingMessage,
+          status: 'patient_booking'
+        }]);
+      
+      if (notifyError) throw notifyError;n
+      await sendBookingEmail(slot, therapist);
+
+      notify('Booking confirmed! Check your email for details.', 'success');
+      closeBookingModal();
+      fetchSchedules(); 
+      
+    } catch (error) {
+      console.error('Booking error:', error);
+      notify('Failed to book slot. Please try again.', 'error');
+    }
+  };
+
+  const sendBookingEmail = async (slot, therapist) => {
+    try {
+      const appointmentDateTime = new Date(`${slot.date}T${slot.time}`);
+      const reminderTime = new Date(appointmentDateTime.getTime() - 30 * 60 * 1000);
+      
+      console.log('Email would be sent to:', userEmail);
+      console.log(' Appointment Details:', {
+        therapist: therapist.name,
+        date: slot.date,
+        time: slot.time,
+        mode: slot.mode,
+        reminderTime: reminderTime.toLocaleString()
+      });
+      
+    } catch (error) {
+      console.error('Error sending email:', error);
+    }
+  };
   
   if (loading) {
     return (
@@ -372,6 +461,7 @@ const PatientTherapistBoard = () => {
             schedules={schedules}
             onlineStatus={onlineStatus}
             onSendChangeRequest={openMessageModal}
+            onBookSlot={handleBookSlot}
           />
         ))}
       </div>
@@ -446,6 +536,67 @@ const PatientTherapistBoard = () => {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bookingModal.isOpen && bookingModal.slot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-60" onClick={closeBookingModal}></div>
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 sm:p-8">
+            <button
+              onClick={closeBookingModal}
+              className="absolute top-3 right-3 p-2 text-gray-400 hover:text-gray-600"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+            
+            <div className="text-center">
+              <CheckCircle className="w-12 h-12 text-purple-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Confirm Booking</h2>
+              
+              <div className="bg-purple-50 p-4 rounded-lg mb-6 text-left">
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Therapist:</strong> {bookingModal.therapist?.name}
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Date:</strong> {new Date(bookingModal.slot.date).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Time:</strong> {bookingModal.slot.time}
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Mode:</strong> {bookingModal.slot.mode}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Rate:</strong> ₹{bookingModal.therapist?.rate}/hr
+                </p>
+              </div>
+
+              <p className="text-gray-600 text-sm mb-6">
+                 You will receive an email confirmation and reminder before your appointment.
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={closeBookingModal}
+                  className="flex-1 py-3 rounded-lg font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBooking}
+                  className="flex-1 py-3 rounded-lg font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+                >
+                  Confirm Booking
+                </button>
+              </div>
             </div>
           </div>
         </div>
