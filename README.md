@@ -1,4 +1,5 @@
-# Memoryboox:-A simple platform that helps caregivers manage daily routines, medicines, and updates, while allowing therapists to check progress and guide them.
+# Memoryboox:-
+A simple platform that helps caregivers manage daily routines, medicines, and updates, while allowing therapists to check progress and guide them.
 
 ## Features:-
 * Medicine routine tracking
